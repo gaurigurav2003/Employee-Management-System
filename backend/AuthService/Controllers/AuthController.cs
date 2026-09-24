@@ -36,5 +36,32 @@ namespace AuthService.Controllers
                 return StatusCode(500, new { error = "An unexpected error occurred." });
             }
         }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
+        {
+            try
+            {
+                var result = await _authService.LoginAsync(request);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                // e.g., inactive user
+                return Forbid();
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { error = "An unexpected error occurred." });
+            }
+        }
     }
 }

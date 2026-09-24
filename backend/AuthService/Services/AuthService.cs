@@ -1,5 +1,4 @@
 ﻿using AuthService.DTOs;
-using AuthService.DTOs;
 using AuthService.Models;
 using AuthService.Repositories;
 using AuthService.Security;
@@ -10,11 +9,13 @@ namespace AuthService.Services
     {
         private readonly IUserRepository _userRepository;
         private readonly PasswordHasher _passwordHasher;
+        private readonly IJwtService _jwtService;
 
-        public AuthService(IUserRepository userRepository, PasswordHasher passwordHasher)
+        public AuthService(IUserRepository userRepository, PasswordHasher passwordHasher, IJwtService jwtService)
         {
             _userRepository = userRepository;
             _passwordHasher = passwordHasher;
+            _jwtService = jwtService;
         }
 
         public async Task RegisterAsync(RegisterRequestDto request)
@@ -63,9 +64,40 @@ namespace AuthService.Services
             await _userRepository.CreateAsync(user);
         }
 
-        public Task<LoginResponseDto> LoginAsync(LoginRequestDto request)
+        public async Task<LoginResponseDto> LoginAsync(LoginRequestDto request)
         {
-            throw new NotImplementedException();
+            if (request == null)
+                throw new ArgumentException("Invalid request");
+
+            if (string.IsNullOrWhiteSpace(request.Username))
+                throw new ArgumentException("Username is required.");
+
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new ArgumentException("Password is required.");
+
+            var user = await _userRepository.GetByUsernameAsync(request.Username);
+            if (user == null)
+                throw new UnauthorizedAccessException("Invalid username or password.");
+
+            var valid = _passwordHasher.VerifyPassword(request.Password, user.PasswordHash);
+            if (!valid)
+                throw new UnauthorizedAccessException("Invalid username or password.");
+
+            if (!user.IsActive)
+                throw new InvalidOperationException("User is inactive.");
+
+            var (token, expires) = _jwtService.GenerateToken(user.UserId, user.Username, user.Role);
+
+            var response = new LoginResponseDto
+            {
+                AccessToken = token,
+                UserId = user.UserId,
+                Username = user.Username,
+                Role = user.Role,
+                ExpiresAt = expires
+            };
+
+            return response;
         }
 
         public Task ForgotPasswordAsync(ForgotPasswordRequestDto request)

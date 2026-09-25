@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using LeaveService.DTOs;
 using LeaveService.Services;
 
 namespace LeaveService.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/v1/leaves")]
     public class LeaveController : ControllerBase

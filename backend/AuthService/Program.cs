@@ -1,68 +1,60 @@
 using Microsoft.EntityFrameworkCore;
-
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using AuthService.Data;
+using AuthService.Repositories;
+using AuthService.Services;
+using AuthService.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddControllers();
 
-// Configure DbContext (SQL Server)
-var connectionString = builder.Configuration.GetConnectionString("AuthDb");
-if (!string.IsNullOrWhiteSpace(connectionString))
-{
-    builder.Services.AddDbContext<AuthService.Data.AuthDbContext>(options =>
-        options.UseSqlServer(connectionString));
-}
+builder.Services.AddOpenApi();
 
-// DI
-builder.Services.AddScoped<AuthService.Repositories.IUserRepository, AuthService.Repositories.UserRepository>();
-builder.Services.AddScoped<AuthService.Services.IAuthService, AuthService.Services.AuthService>();
-builder.Services.AddSingleton<AuthService.Security.PasswordHasher>();
-// JWT service
-builder.Services.AddSingleton<AuthService.Security.IJwtService, AuthService.Security.JwtService>();
+// Database
+builder.Services.AddDbContext<AuthDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("AuthDb")));
 
-// Authentication
-var jwtKey = builder.Configuration["Jwt:Key"];
-if (!string.IsNullOrWhiteSpace(jwtKey))
-{
-    var key = System.Text.Encoding.UTF8.GetBytes(jwtKey);
-    builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
-    })
+// JWT Authentication
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.RequireHttpsMetadata = false;
-        options.SaveToken = true;
-        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
+
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(key)
+
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(
+                    builder.Configuration["Jwt:Key"]!))
         };
     });
-    builder.Services.AddAuthorization();
-}
 
-// OpenAPI/Swagger
-builder.Services.AddOpenApi();
+builder.Services.AddAuthorization();
+
+// Dependency Injection
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAuthService, AuthService.Services.AuthService>();
+
+builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddScoped<IJwtService, JwtService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();
-
 
 app.UseAuthentication();
 app.UseAuthorization();

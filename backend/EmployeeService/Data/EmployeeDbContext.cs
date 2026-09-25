@@ -20,6 +20,12 @@ namespace EmployeeService.Data
             {
                 entity.HasKey(e => e.EmployeeId);
 
+		entity.Property(e => e.UserId)
+ 		   .IsRequired();
+
+		entity.HasIndex(e => e.UserId)
+  			  .IsUnique();
+
                 entity.Property(e => e.FirstName)
                     .IsRequired();
 

@@ -1,9 +1,11 @@
 using DepartmentService.DTOs;
 using DepartmentService.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace DepartmentService.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/v1/departments")]
     public class DepartmentController : ControllerBase

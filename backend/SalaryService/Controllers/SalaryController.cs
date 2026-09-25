@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using SalaryService.DTOs;
 using SalaryService.Services;
 
 namespace SalaryService.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/v1/salaries")]
     public class SalaryController : ControllerBase

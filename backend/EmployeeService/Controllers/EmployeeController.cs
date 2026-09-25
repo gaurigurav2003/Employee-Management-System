@@ -1,9 +1,11 @@
 ﻿using EmployeeService.DTOs;
 using EmployeeService.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EmployeeService.Controllers
 {
+	[Authorize]
     [ApiController]
     [Route("api/v1/employees")]
     [Produces("application/json")]

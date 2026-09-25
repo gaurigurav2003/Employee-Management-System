@@ -1,37 +1,62 @@
-﻿using EmployeeService.Models;
+﻿using EmployeeService.Data;
+using EmployeeService.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace EmployeeService.Repositories
 {
     public class EmployeeRepository : IEmployeeRepository
     {
-        public Task<Employee> AddAsync(Employee employee)
+        private readonly EmployeeDbContext _context;
+
+        public EmployeeRepository(EmployeeDbContext context)
         {
-            throw new NotImplementedException();
+            _context = context;
         }
 
-        public Task<Employee?> GetByIdAsync(Guid employeeId)
+        public async Task<Employee> AddAsync(Employee employee)
         {
-            throw new NotImplementedException();
+            _context.Employees.Add(employee);
+            await _context.SaveChangesAsync();
+            return employee;
         }
 
-        public Task<IEnumerable<Employee>> GetAllAsync()
+        public async Task<Employee?> GetByIdAsync(Guid employeeId)
         {
-            throw new NotImplementedException();
+            return await _context.Employees.FindAsync(employeeId);
         }
 
-        public Task<IEnumerable<Employee>> SearchAsync(string searchTerm)
+        public async Task<IEnumerable<Employee>> GetAllAsync()
         {
-            throw new NotImplementedException();
+            return await _context.Employees.AsNoTracking().ToListAsync();
         }
 
-        public Task<Employee> UpdateAsync(Employee employee)
+        public async Task<IEnumerable<Employee>> SearchAsync(string searchTerm)
         {
-            throw new NotImplementedException();
+            if (string.IsNullOrWhiteSpace(searchTerm))
+                return Enumerable.Empty<Employee>();
+
+            var term = searchTerm.ToLower();
+
+            return await _context.Employees
+                .AsNoTracking()
+                .Where(e => e.FirstName.ToLower().Contains(term)
+                         || e.LastName.ToLower().Contains(term)
+                         || e.Email.ToLower().Contains(term)
+                         || e.Phone.ToLower().Contains(term))
+                .ToListAsync();
         }
 
-        public Task DeleteAsync(Employee employee)
+        public async Task<Employee> UpdateAsync(Employee employee)
         {
-            throw new NotImplementedException();
+            _context.Employees.Update(employee);
+            await _context.SaveChangesAsync();
+            return employee;
+        }
+
+        public async Task DeleteAsync(Employee employee)
+        {
+            _context.Employees.Remove(employee);
+            await _context.SaveChangesAsync();
         }
     }
 }

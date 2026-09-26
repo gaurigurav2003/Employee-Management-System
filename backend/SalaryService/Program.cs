@@ -10,8 +10,10 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
+// Add Controllers
 builder.Services.AddControllers();
+
+// Swagger / API Explorer
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(c =>
@@ -23,11 +25,15 @@ builder.Services.AddSwaggerGen(c =>
         Description = "Salary Service API"
     });
 
+    // JWT Bearer Authentication in Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+        Description =
+            "Enter JWT token using the Bearer scheme. Example: Bearer {token}",
+
         Name = "Authorization",
         In = ParameterLocation.Header,
+
         Type = SecuritySchemeType.Http,
         Scheme = "Bearer",
         BearerFormat = "JWT"
@@ -49,15 +55,14 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddOpenApi();
-
-// Database
+// Database Configuration
 builder.Services.AddDbContext<SalaryDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("SalaryDb")));
 
 // JWT Authentication
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(
+    JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -76,34 +81,47 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Authorization
 builder.Services.AddAuthorization();
 
 // Dependency Injection
 builder.Services.AddScoped<ISalaryRepository, SalaryRepository>();
+
 builder.Services.AddScoped<
     ISalaryService,
     SalaryService.Services.SalaryService>();
 
 var app = builder.Build();
 
+// Global Exception Middleware
 app.UseMiddleware<GlobalExceptionMiddleware>();
+
+// Correlation ID Middleware
 app.UseMiddleware<CorrelationIdMiddleware>();
 
+// Swagger
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
+
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Salary Service v1");
+        c.SwaggerEndpoint(
+            "/swagger/v1/swagger.json",
+            "Salary Service v1");
     });
-    app.MapOpenApi();
 }
 
+// HTTPS
 app.UseHttpsRedirection();
 
+// Authentication
 app.UseAuthentication();
+
+// Authorization
 app.UseAuthorization();
 
+// Map Controllers
 app.MapControllers();
 
 app.Run();

@@ -25,11 +25,11 @@ builder.Services.AddSwaggerGen(c =>
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+        Description = "Enter your JWT token using the Bearer scheme.",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
-        Scheme = "Bearer",
+        Scheme = "bearer",
         BearerFormat = "JWT"
     });
 
@@ -48,8 +48,6 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 });
-
-builder.Services.AddOpenApi();
 
 // Database
 builder.Services.AddDbContext<AuthDbContext>(options =>
@@ -93,11 +91,13 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
+
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "AuthService v1");
+        c.SwaggerEndpoint(
+            "/swagger/v1/swagger.json",
+            "AuthService v1");
     });
-    app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();

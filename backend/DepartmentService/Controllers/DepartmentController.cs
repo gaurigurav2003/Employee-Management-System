@@ -17,6 +17,7 @@ namespace DepartmentService.Controllers
             _service = service;
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpPost]
         public async Task<ActionResult<DepartmentResponseDto>> CreateDepartment(DepartmentCreateDto dto)
         {
@@ -34,6 +35,7 @@ namespace DepartmentService.Controllers
                 return Problem("An unexpected error occurred.");
             }
         }
+
 
         [HttpGet("{departmentId}")]
         public async Task<ActionResult<DepartmentResponseDto>> GetDepartmentById(Guid departmentId)
@@ -67,6 +69,7 @@ namespace DepartmentService.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpPut("{departmentId}")]
         public async Task<ActionResult<DepartmentResponseDto>> UpdateDepartment(Guid departmentId, DepartmentUpdateDto dto)
         {
@@ -89,6 +92,7 @@ namespace DepartmentService.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpDelete("{departmentId}")]
         public async Task<IActionResult> DeleteDepartment(Guid departmentId)
         {

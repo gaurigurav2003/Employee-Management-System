@@ -8,6 +8,8 @@ namespace EmployeeService.Repositories
 
         Task<Employee?> GetByIdAsync(Guid employeeId);
 
+        Task<Employee?> GetByUserIdAsync(Guid userId);
+
         Task<IEnumerable<Employee>> GetAllAsync();
 
         Task<IEnumerable<Employee>> SearchAsync(string searchTerm);

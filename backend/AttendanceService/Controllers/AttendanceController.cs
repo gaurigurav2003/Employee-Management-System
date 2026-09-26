@@ -11,19 +11,38 @@ namespace AttendanceService.Controllers
     public class AttendanceController : ControllerBase
     {
         private readonly IAttendanceService _service;
+        private readonly EmployeeServiceClient _employeeServiceClient;
 
-        public AttendanceController(IAttendanceService service)
+        public AttendanceController(
+      IAttendanceService service,
+      EmployeeServiceClient employeeServiceClient)
         {
             _service = service;
+            _employeeServiceClient = employeeServiceClient;
         }
 
-        // Check In
+        [Authorize(Roles = "Employee")]
         [HttpPost("check-in")]
         public async Task<IActionResult> CheckIn(
-            [FromBody] AttendanceCreateDto dto)
+     [FromBody] AttendanceCreateDto dto)
         {
             try
             {
+                var employee = await _employeeServiceClient.GetMyEmployeeAsync();
+
+                if (employee == null)
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Unable to identify the logged-in employee."
+                    });
+                }
+
+                if (dto.EmployeeId != employee.EmployeeId)
+                {
+                    return Forbid();
+                }
+
                 var result = await _service.CheckInAsync(dto);
 
                 return CreatedAtAction(
@@ -40,7 +59,6 @@ namespace AttendanceService.Controllers
             }
         }
 
-        // Get Attendance By ID
         [HttpGet("{attendanceId}")]
         public async Task<IActionResult> GetById(Guid attendanceId)
         {
@@ -54,6 +72,24 @@ namespace AttendanceService.Controllers
                 });
             }
 
+            if (User.IsInRole("Employee"))
+            {
+                var employee = await _employeeServiceClient.GetMyEmployeeAsync();
+
+                if (employee == null)
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Unable to identify the logged-in employee."
+                    });
+                }
+
+                if (result.EmployeeId != employee.EmployeeId)
+                {
+                    return Forbid();
+                }
+            }
+
             return Ok(result);
         }
 
@@ -61,12 +97,31 @@ namespace AttendanceService.Controllers
         [HttpGet("employee/{employeeId}")]
         public async Task<IActionResult> GetByEmployee(Guid employeeId)
         {
+            if (User.IsInRole("Employee"))
+            {
+                var employee = await _employeeServiceClient.GetMyEmployeeAsync();
+
+                if (employee == null)
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Unable to identify the logged-in employee."
+                    });
+                }
+
+                if (employeeId != employee.EmployeeId)
+                {
+                    return Forbid();
+                }
+            }
+
             var result = await _service.GetByEmployeeAsync(employeeId);
 
             return Ok(result);
         }
 
         // Get All Attendance
+        [Authorize(Roles = "Admin,HR,Manager")]
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -75,23 +130,40 @@ namespace AttendanceService.Controllers
             return Ok(result);
         }
 
-        // Check Out
+        [Authorize(Roles = "Employee")]
         [HttpPut("{attendanceId}/check-out")]
         public async Task<IActionResult> CheckOut(
-            Guid attendanceId,
-            [FromBody] AttendanceUpdateDto dto)
+      Guid attendanceId,
+      [FromBody] AttendanceUpdateDto dto)
         {
-            var result = await _service.CheckOutAsync(
-                attendanceId,
-                dto);
+            var attendance = await _service.GetByIdAsync(attendanceId);
 
-            if (result == null)
+            if (attendance == null)
             {
                 return NotFound(new
                 {
                     message = "Attendance record not found."
                 });
             }
+
+            var employee = await _employeeServiceClient.GetMyEmployeeAsync();
+
+            if (employee == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "Unable to identify the logged-in employee."
+                });
+            }
+
+            if (attendance.EmployeeId != employee.EmployeeId)
+            {
+                return Forbid();
+            }
+
+            var result = await _service.CheckOutAsync(
+                attendanceId,
+                dto);
 
             return Ok(result);
         }

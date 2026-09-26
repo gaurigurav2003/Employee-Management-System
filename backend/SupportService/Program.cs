@@ -10,7 +10,12 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add Controllers
 builder.Services.AddControllers();
+
+builder.Services.AddHttpContextAccessor();
+
+// Swagger / API Explorer
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(c =>
@@ -22,11 +27,15 @@ builder.Services.AddSwaggerGen(c =>
         Description = "Support Service API"
     });
 
+    // JWT Bearer Authentication in Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+        Description =
+            "Enter JWT token using the Bearer scheme. Example: Bearer {token}",
+
         Name = "Authorization",
         In = ParameterLocation.Header,
+
         Type = SecuritySchemeType.Http,
         Scheme = "Bearer",
         BearerFormat = "JWT"
@@ -48,14 +57,14 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddOpenApi();
-
+// Database Configuration
 builder.Services.AddDbContext<SupportDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("SupportDb")));
 
 // JWT Authentication
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(
+    JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -74,6 +83,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Authorization
 builder.Services.AddAuthorization();
 
 // Dependency Injection
@@ -85,26 +95,46 @@ builder.Services.AddScoped<
     ISupportTicketService,
     SupportTicketService>();
 
+
+builder.Services.AddHttpClient("EmployeeService", client =>
+{
+    client.BaseAddress = new Uri(
+        builder.Configuration["Services:EmployeeServiceUrl"]!);
+});
+
+builder.Services.AddScoped<EmployeeServiceClient>();
+
 var app = builder.Build();
 
+// Global Exception Middleware
 app.UseMiddleware<GlobalExceptionMiddleware>();
+
+// Correlation ID Middleware
 app.UseMiddleware<CorrelationIdMiddleware>();
 
+// Swagger
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
+
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Support Service v1");
+        c.SwaggerEndpoint(
+            "/swagger/v1/swagger.json",
+            "Support Service v1");
     });
-    app.MapOpenApi();
 }
 
+// HTTPS
 app.UseHttpsRedirection();
 
+// Authentication
 app.UseAuthentication();
+
+// Authorization
 app.UseAuthorization();
 
+// Map Controllers
 app.MapControllers();
 
 app.Run();

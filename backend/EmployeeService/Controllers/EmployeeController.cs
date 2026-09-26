@@ -18,12 +18,27 @@ namespace EmployeeService.Controllers
             _employeeService = employeeService;
         }
 
+        [Authorize]
         [HttpGet("{employeeId}")]
         public async Task<ActionResult<EmployeeResponseDto>> GetEmployeeById(Guid employeeId)
         {
             try
             {
+                var userIdClaim = User.FindFirst("userId")?.Value;
+
+                if (string.IsNullOrEmpty(userIdClaim))
+                    return Unauthorized();
+
+                if (!Guid.TryParse(userIdClaim, out var userId))
+                    return Unauthorized();
+
+                var myEmployee = await _employeeService.GetMyProfileAsync(userId);
+
+                if (myEmployee.EmployeeId != employeeId)
+                    return Forbid();
+
                 var employee = await _employeeService.GetEmployeeByIdAsync(employeeId);
+
                 return Ok(employee);
             }
             catch (KeyNotFoundException)
@@ -36,6 +51,7 @@ namespace EmployeeService.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,HR,Manager")]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<EmployeeResponseDto>>> GetAllEmployees()
         {
@@ -50,6 +66,8 @@ namespace EmployeeService.Controllers
             }
         }
 
+
+        [Authorize(Roles = "Admin,HR,Manager")]
         [HttpGet("search")]
         public async Task<ActionResult<IEnumerable<EmployeeResponseDto>>> SearchEmployees([FromQuery] string searchTerm)
         {
@@ -68,6 +86,7 @@ namespace EmployeeService.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpPost]
         public async Task<ActionResult<EmployeeResponseDto>> CreateEmployee(EmployeeCreateDto employeeDto)
         {
@@ -86,6 +105,7 @@ namespace EmployeeService.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpPut("{employeeId}")]
         public async Task<ActionResult<EmployeeResponseDto>> UpdateEmployee(Guid employeeId, EmployeeUpdateDto employeeDto)
         {
@@ -108,6 +128,7 @@ namespace EmployeeService.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpDelete("{employeeId}")]
         public async Task<IActionResult> DeleteEmployee(Guid employeeId)
         {
@@ -115,6 +136,34 @@ namespace EmployeeService.Controllers
             {
                 await _employeeService.DeleteEmployeeAsync(employeeId);
                 return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+            catch (Exception)
+            {
+                return Problem("An unexpected error occurred.");
+            }
+        }
+
+        [HttpGet("me")]
+        [Authorize(Roles = "Employee")]
+        public async Task<ActionResult<EmployeeResponseDto>> GetMyProfile()
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst("userId")?.Value;
+
+                if (string.IsNullOrEmpty(userIdClaim))
+                    return Unauthorized();
+
+                if (!Guid.TryParse(userIdClaim, out var userId))
+                    return Unauthorized();
+
+                var employee = await _employeeService.GetMyProfileAsync(userId);
+
+                return Ok(employee);
             }
             catch (KeyNotFoundException)
             {

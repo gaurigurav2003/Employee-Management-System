@@ -11,76 +11,152 @@ namespace LeaveService.Controllers
     public class LeaveController : ControllerBase
     {
         private readonly ILeaveService _service;
+        private readonly EmployeeServiceClient _employeeServiceClient;
 
-        public LeaveController(ILeaveService service)
+        public LeaveController(
+     ILeaveService service,
+     EmployeeServiceClient employeeServiceClient)
         {
             _service = service;
+            _employeeServiceClient = employeeServiceClient;
         }
 
+        [Authorize(Roles = "Employee")]
         [HttpPost]
-        public async Task<ActionResult<LeaveResponseDto>> ApplyLeave(LeaveCreateDto dto)
+        public async Task<ActionResult<LeaveResponseDto>> ApplyLeave(
+     LeaveCreateDto dto)
         {
             try
             {
-                var created = await _service.ApplyLeaveAsync(dto);
-                return CreatedAtAction(nameof(GetLeaveById), new { leaveId = created.LeaveId }, created);
+                var employee =
+                    await _employeeServiceClient.GetMyEmployeeAsync();
+
+                if (employee == null)
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Unable to identify the logged-in employee."
+                    });
+                }
+
+                if (dto.EmployeeId != employee.EmployeeId)
+                {
+                    return Forbid();
+                }
+
+                var result =
+                    await _service.ApplyLeaveAsync(dto);
+
+                return Ok(result);
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new { error = ex.Message });
-            }
-            catch (Exception)
-            {
-                return Problem("An unexpected error occurred.");
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
             }
         }
-
+        [Authorize]
         [HttpGet("{leaveId}")]
-        public async Task<ActionResult<LeaveResponseDto>> GetLeaveById(Guid leaveId)
+        public async Task<ActionResult<LeaveResponseDto>> GetLeaveById(
+    Guid leaveId)
         {
             try
             {
-                var l = await _service.GetLeaveByIdAsync(leaveId);
-                return Ok(l);
+                var result =
+                    await _service.GetLeaveByIdAsync(leaveId);
+
+                if (User.IsInRole("Employee"))
+                {
+                    var employee =
+                        await _employeeServiceClient.GetMyEmployeeAsync();
+
+                    if (employee == null)
+                    {
+                        return Unauthorized(new
+                        {
+                            message = "Unable to identify the logged-in employee."
+                        });
+                    }
+
+                    if (result.EmployeeId != employee.EmployeeId)
+                    {
+                        return Forbid();
+                    }
+                }
+
+                return Ok(result);
             }
             catch (KeyNotFoundException)
             {
-                return NotFound();
-            }
-            catch (Exception)
-            {
-                return Problem("An unexpected error occurred.");
+                return NotFound(new
+                {
+                    message = "Leave not found."
+                });
             }
         }
 
+        [Authorize]
         [HttpGet("employee/{employeeId}")]
-        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>> GetLeavesByEmployee(Guid employeeId)
+        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>>
+     GetLeavesByEmployee(Guid employeeId)
         {
-            try
+            if (User.IsInRole("Employee"))
             {
-                var list = await _service.GetLeavesByEmployeeAsync(employeeId);
-                return Ok(list);
-            }
-            catch (Exception)
-            {
-                return Problem("An unexpected error occurred.");
-            }
-        }
+                var employee =
+                    await _employeeServiceClient.GetMyEmployeeAsync();
 
+                if (employee == null)
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Unable to identify the logged-in employee."
+                    });
+                }
+
+                if (employeeId != employee.EmployeeId)
+                {
+                    return Forbid();
+                }
+            }
+
+            var result =
+                await _service.GetLeavesByEmployeeAsync(employeeId);
+
+            return Ok(result);
+        }
+        [Authorize]
         [HttpGet("{employeeId}/history")]
-        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>> GetLeaveHistory(Guid employeeId)
+        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>>
+            GetLeaveHistory(Guid employeeId)
         {
-            try
+            if (User.IsInRole("Employee"))
             {
-                var list = await _service.GetLeaveHistoryAsync(employeeId);
-                return Ok(list);
+                var employee =
+                    await _employeeServiceClient.GetMyEmployeeAsync();
+
+                if (employee == null)
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Unable to identify the logged-in employee."
+                    });
+                }
+
+                if (employeeId != employee.EmployeeId)
+                {
+                    return Forbid();
+                }
             }
-            catch (Exception)
-            {
-                return Problem("An unexpected error occurred.");
-            }
+
+            var result =
+                await _service.GetLeaveHistoryAsync(employeeId);
+
+            return Ok(result);
         }
 
+        [Authorize(Roles = "Admin,HR,Manager")]
         [HttpPut("{leaveId}/approve")]
         public async Task<ActionResult<LeaveResponseDto>> ApproveLeave(Guid leaveId, [FromBody] Guid approverId)
         {
@@ -102,7 +178,8 @@ namespace LeaveService.Controllers
                 return Problem("An unexpected error occurred.");
             }
         }
-
+        
+        [Authorize(Roles = "Admin,HR,Manager")]
         [HttpPut("{leaveId}/reject")]
         public async Task<ActionResult<LeaveResponseDto>> RejectLeave(Guid leaveId, [FromBody] Guid approverId)
         {

@@ -12,6 +12,8 @@ namespace EmployeeService.Services
 
         Task<IEnumerable<EmployeeResponseDto>> SearchEmployeesAsync(string searchTerm);
 
+        Task<EmployeeResponseDto> GetMyProfileAsync(Guid userId);
+
         Task<EmployeeResponseDto> UpdateEmployeeAsync(
             Guid employeeId,
             EmployeeUpdateDto employeeDto);

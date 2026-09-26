@@ -17,6 +17,7 @@ namespace SalaryService.Controllers
             _service = service;
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpPost]
         public async Task<ActionResult<EmployeeSalaryResponseDto>> CreateSalary(EmployeeSalaryCreateDto dto)
         {
@@ -35,6 +36,7 @@ namespace SalaryService.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpGet("{employeeId}")]
         public async Task<ActionResult<EmployeeSalaryResponseDto>> GetSalary(Guid employeeId)
         {
@@ -53,6 +55,7 @@ namespace SalaryService.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin,HR")]
         [HttpPut("{employeeId}")]
         public async Task<ActionResult<EmployeeSalaryResponseDto>> UpdateSalary(Guid employeeId, EmployeeSalaryUpdateDto dto)
         {

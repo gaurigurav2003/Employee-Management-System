@@ -25,6 +25,13 @@ namespace EmployeeService.Repositories
             return await _context.Employees.FindAsync(employeeId);
         }
 
+        public async Task<Employee?> GetByUserIdAsync(Guid userId)
+        {
+            return await _context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == userId);
+        }
+
         public async Task<IEnumerable<Employee>> GetAllAsync()
         {
             return await _context.Employees.AsNoTracking().ToListAsync();

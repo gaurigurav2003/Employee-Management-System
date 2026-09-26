@@ -42,7 +42,8 @@ namespace EmployeeService.Services
                 DateOfJoining = employeeDto.DateOfJoining,
                 DepartmentId = employeeDto.DepartmentId,
                 Role = employeeDto.Role,
-                EmploymentStatus = employeeDto.EmploymentStatus
+                EmploymentStatus = employeeDto.EmploymentStatus,
+                 UserId = employeeDto.UserId,
             };
 
             var created = await _employeeRepository.AddAsync(employee);
@@ -56,6 +57,16 @@ namespace EmployeeService.Services
 
             if (employee == null)
                 throw new KeyNotFoundException("Employee not found.");
+
+            return MapToResponseDto(employee);
+        }
+
+        public async Task<EmployeeResponseDto> GetMyProfileAsync(Guid userId)
+        {
+            var employee = await _employeeRepository.GetByUserIdAsync(userId);
+
+            if (employee == null)
+                throw new KeyNotFoundException("Employee profile not found.");
 
             return MapToResponseDto(employee);
         }

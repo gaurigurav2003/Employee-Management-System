@@ -21,7 +21,7 @@ namespace LeaveService.Controllers
             _employeeServiceClient = employeeServiceClient;
         }
 
-        [Authorize(Roles = "Employee")]
+        [Authorize(Roles = "Employee,HR,Manager,Admin")]
         [HttpPost]
         public async Task<ActionResult<LeaveResponseDto>> ApplyLeave(
      LeaveCreateDto dto)
@@ -55,6 +55,22 @@ namespace LeaveService.Controllers
                 {
                     message = ex.Message
                 });
+            }
+        }
+
+
+        [Authorize(Roles = "Admin,HR,Manager")]
+        [HttpGet("")]
+        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>> GetAllLeaves()
+        {
+            try
+            {
+                var result = await _service.GetAllLeavesAsync();
+                return Ok(result);
+            }
+            catch (Exception)
+            {
+                return Problem("An unexpected error occurred.");
             }
         }
         [Authorize]

@@ -55,6 +55,12 @@ namespace LeaveService.Services
             return list.Select(Map);
         }
 
+        public async Task<IEnumerable<LeaveResponseDto>> GetAllLeavesAsync()
+        {
+            var list = await _repo.GetAllAsync();
+            return list.Select(Map);
+        }
+
         public async Task<LeaveResponseDto> ApproveLeaveAsync(Guid leaveId, Guid approverId)
         {
             var leave = await _repo.GetByIdAsync(leaveId);

@@ -39,6 +39,14 @@ namespace LeaveService.Repositories
 
         }
 
+        public async Task<IEnumerable<Leave>> GetAllAsync()
+        {
+            return await _context.Leaves
+                .AsNoTracking()
+                .OrderByDescending(l => l.AppliedAt)
+                .ToListAsync();
+        }
+
         public async Task<Leave> UpdateAsync(Leave leave)
         {
             _context.Leaves.Update(leave);

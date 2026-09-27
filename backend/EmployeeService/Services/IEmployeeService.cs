@@ -19,5 +19,7 @@ namespace EmployeeService.Services
             EmployeeUpdateDto employeeDto);
 
         Task DeleteEmployeeAsync(Guid employeeId);
+
+        
     }
 }

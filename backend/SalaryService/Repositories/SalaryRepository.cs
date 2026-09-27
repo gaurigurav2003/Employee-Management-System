@@ -58,6 +58,12 @@ namespace SalaryService.Repositories
             return component;
         }
 
+        public async Task DeleteSalaryComponentAsync(SalaryComponent component)
+        {
+            _context.SalaryComponents.Remove(component);
+            await _context.SaveChangesAsync();
+        }
+
         // SalaryRevision
         public async Task<SalaryRevision> AddSalaryRevisionAsync(SalaryRevision revision)
         {
@@ -170,6 +176,13 @@ namespace SalaryService.Repositories
         public async Task<Payslip?> GetPayslipByIdAsync(Guid payslipId)
         {
             return await _context.Payslips.FindAsync(payslipId);
+        }
+
+        public async Task<IEnumerable<EmployeeSalary>> GetEmployeeSalariesAsync()
+        {
+            return await _context.EmployeeSalaries
+                .AsNoTracking()
+                .ToListAsync();
         }
     }
 }

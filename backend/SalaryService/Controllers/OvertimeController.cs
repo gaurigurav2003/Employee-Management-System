@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SalaryService.DTOs;
 using SalaryService.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SalaryService.Controllers
 {
@@ -47,12 +48,21 @@ namespace SalaryService.Controllers
             }
         }
 
+        [Authorize]
         [HttpPut("{overtimeId}/approve")]
-        public async Task<ActionResult<OvertimeResponseDto>> ApproveOvertime(Guid overtimeId, [FromBody] Guid approverId)
+        public async Task<ActionResult<OvertimeResponseDto>> ApproveOvertime(Guid overtimeId)
         {
             try
             {
-                var updated = await _service.ApproveOvertimeAsync(overtimeId, approverId);
+                var userId = User.FindFirst("userId")?.Value;
+
+                if (!Guid.TryParse(userId, out var approverId))
+                    return Unauthorized();
+
+                var updated = await _service.ApproveOvertimeAsync(
+                    overtimeId,
+                    approverId);
+
                 return Ok(updated);
             }
             catch (KeyNotFoundException)
@@ -69,12 +79,21 @@ namespace SalaryService.Controllers
             }
         }
 
+        [Authorize]
         [HttpPut("{overtimeId}/reject")]
-        public async Task<ActionResult<OvertimeResponseDto>> RejectOvertime(Guid overtimeId, [FromBody] Guid approverId)
+        public async Task<ActionResult<OvertimeResponseDto>> RejectOvertime(Guid overtimeId)
         {
             try
             {
-                var updated = await _service.RejectOvertimeAsync(overtimeId, approverId);
+                var userId = User.FindFirst("userId")?.Value;
+
+                if (!Guid.TryParse(userId, out var approverId))
+                    return Unauthorized();
+
+                var updated = await _service.RejectOvertimeAsync(
+                    overtimeId,
+                    approverId);
+
                 return Ok(updated);
             }
             catch (KeyNotFoundException)
@@ -91,4 +110,5 @@ namespace SalaryService.Controllers
             }
         }
     }
-}
+    }
+

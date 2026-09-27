@@ -14,6 +14,8 @@ namespace SalaryService.Services
         Task<IEnumerable<SalaryComponentResponseDto>> GetSalaryComponentsAsync(Guid employeeId);
         Task<SalaryComponentResponseDto> UpdateSalaryComponentAsync(Guid salaryComponentId, SalaryComponentUpdateDto dto);
 
+        Task DeleteSalaryComponentAsync(Guid salaryComponentId);
+
         // SalaryRevision
         Task<SalaryRevisionResponseDto> AddSalaryRevisionAsync(SalaryRevisionCreateDto dto);
         Task<IEnumerable<SalaryRevisionResponseDto>> GetSalaryRevisionsAsync(Guid employeeId);
@@ -22,6 +24,8 @@ namespace SalaryService.Services
         Task<BonusResponseDto> AddBonusAsync(BonusCreateDto dto);
         Task<IEnumerable<BonusResponseDto>> GetBonusesAsync(Guid employeeId);
         Task<BonusResponseDto> UpdateBonusAsync(Guid bonusId, BonusUpdateDto dto);
+
+
 
         // Overtime
         Task<OvertimeResponseDto> AddOvertimeAsync(OvertimeCreateDto dto);

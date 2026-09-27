@@ -12,6 +12,28 @@ namespace SalaryService.Controllers
     {
         private readonly ISalaryService _service;
 
+
+        [HttpPut("components/{salaryComponentId}")]
+        public async Task<ActionResult<SalaryComponentResponseDto>> UpdateSalaryComponent(
+    Guid salaryComponentId,
+    [FromBody] SalaryComponentUpdateDto dto)
+        {
+            var result = await _service.UpdateSalaryComponentAsync(
+                salaryComponentId,
+                dto
+            );
+
+            return Ok(result);
+        }
+
+        [HttpDelete("components/{salaryComponentId}")]
+        public async Task<IActionResult> DeleteSalaryComponent(Guid salaryComponentId)
+        {
+            await _service.DeleteSalaryComponentAsync(salaryComponentId);
+
+            return NoContent();
+        }
+
         public SalaryController(ISalaryService service)
         {
             _service = service;
@@ -77,5 +99,8 @@ namespace SalaryService.Controllers
                 return Problem("An unexpected error occurred.");
             }
         }
+
+
+       
     }
 }

@@ -17,5 +17,7 @@ namespace EmployeeService.Repositories
         Task<Employee> UpdateAsync(Employee employee);
 
         Task DeleteAsync(Employee employee);
+
+        
     }
 }

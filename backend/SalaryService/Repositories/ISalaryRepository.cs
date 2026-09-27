@@ -7,7 +7,12 @@ namespace SalaryService.Repositories
         // EmployeeSalary
         Task<EmployeeSalary> AddEmployeeSalaryAsync(EmployeeSalary salary);
         Task<EmployeeSalary?> GetEmployeeSalaryByEmployeeIdAsync(Guid employeeId);
+
+        Task<IEnumerable<EmployeeSalary>> GetEmployeeSalariesAsync();
+
         Task<EmployeeSalary> UpdateEmployeeSalaryAsync(EmployeeSalary salary);
+
+        Task DeleteSalaryComponentAsync(SalaryComponent component);
 
         // SalaryComponent
         Task<SalaryComponent> AddSalaryComponentAsync(SalaryComponent component);

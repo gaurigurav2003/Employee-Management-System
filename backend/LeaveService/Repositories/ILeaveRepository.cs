@@ -9,5 +9,7 @@ namespace LeaveService.Repositories
         Task<IEnumerable<Leave>> GetByEmployeeIdAsync(Guid employeeId);
         Task<IEnumerable<Leave>> GetHistoryByEmployeeIdAsync(Guid employeeId);
         Task<Leave> UpdateAsync(Leave leave);
+
+        Task<IEnumerable<Leave>> GetAllAsync();
     }
 }

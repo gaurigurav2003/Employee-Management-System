@@ -93,23 +93,58 @@ namespace SalaryService.Services
             return Map(updated);
         }
 
-        // SalaryRevision
-        public async Task<SalaryRevisionResponseDto> AddSalaryRevisionAsync(SalaryRevisionCreateDto dto)
+        public async Task DeleteSalaryComponentAsync(Guid salaryComponentId)
         {
-            if (dto == null) throw new ArgumentException("Data required");
-            if (dto.PreviousSalary < 0 || dto.RevisedSalary < 0) throw new ArgumentException("Salary must be >= 0");
+            var comp = await _repo.GetSalaryComponentByIdAsync(salaryComponentId);
 
-            var rev = new SalaryRevision
+            if (comp == null)
+                throw new KeyNotFoundException("Salary component not found");
+
+            await _repo.DeleteSalaryComponentAsync(comp);
+        }
+
+        // SalaryRevision
+        public async Task<SalaryRevisionResponseDto> AddSalaryRevisionAsync(
+    SalaryRevisionCreateDto dto)
+        {
+            if (dto == null)
+                throw new ArgumentException("Data required");
+
+            if (dto.RevisedSalary < 0)
+                throw new ArgumentException("Revised salary must be >= 0");
+
+            var existingSalary =
+                await _repo.GetEmployeeSalaryByEmployeeIdAsync(dto.EmployeeId);
+
+            if (existingSalary == null)
+                throw new KeyNotFoundException("Employee salary not found");
+
+            var previousSalary = existingSalary.BasicSalary;
+
+            if (dto.RevisedSalary == previousSalary)
+                throw new ArgumentException(
+                    "Revised salary must be different from current salary");
+
+            var revision = new SalaryRevision
             {
                 SalaryRevisionId = Guid.NewGuid(),
                 EmployeeId = dto.EmployeeId,
-                PreviousSalary = dto.PreviousSalary,
+                PreviousSalary = previousSalary,
                 RevisedSalary = dto.RevisedSalary,
                 RevisionDate = dto.RevisionDate,
                 Reason = dto.Reason
             };
 
-            var created = await _repo.AddSalaryRevisionAsync(rev);
+            // Update current employee salary
+            existingSalary.BasicSalary = dto.RevisedSalary;
+            existingSalary.EffectiveFrom = dto.RevisionDate;
+
+            // Save revision history
+            var created = await _repo.AddSalaryRevisionAsync(revision);
+
+            // Update current salary
+            await _repo.UpdateEmployeeSalaryAsync(existingSalary);
+
             return Map(created);
         }
 
@@ -220,7 +255,12 @@ namespace SalaryService.Services
         // Payroll - simple generation combining basic salary + components + bonuses + approved overtime
         public async Task<PayrollResponseDto> GeneratePayrollAsync(int month, int year)
         {
-            // Simple payroll generation: create Payroll record; creating PayrollItems is out of scope for full business logic
+            if (month < 1 || month > 12)
+                throw new ArgumentException("Invalid payroll month");
+
+            if (year < 2000)
+                throw new ArgumentException("Invalid payroll year");
+
             var payroll = new Payroll
             {
                 PayrollId = Guid.NewGuid(),
@@ -230,8 +270,72 @@ namespace SalaryService.Services
                 Status = "Generated"
             };
 
-            var created = await _repo.AddPayrollAsync(payroll);
-            return Map(created);
+            var createdPayroll = await _repo.AddPayrollAsync(payroll);
+
+            var salaries = await _repo.GetEmployeeSalariesAsync();
+
+            foreach (var salary in salaries)
+            {
+                var components =
+                    await _repo.GetSalaryComponentsByEmployeeIdAsync(salary.EmployeeId);
+
+                var bonuses =
+                    await _repo.GetBonusesByEmployeeIdAsync(salary.EmployeeId);
+
+                var overtime =
+                    await _repo.GetOvertimeByEmployeeIdAsync(salary.EmployeeId);
+
+                var totalAllowances = components
+    .Where(c => string.Equals(
+        c.ComponentType?.Trim(),
+        "Earning",
+        StringComparison.OrdinalIgnoreCase))
+    .Sum(c => c.Amount);
+
+                var totalDeductions = components
+                    .Where(c => string.Equals(
+                        c.ComponentType?.Trim(),
+                        "Deduction",
+                        StringComparison.OrdinalIgnoreCase))
+                    .Sum(c => c.Amount);
+
+               
+
+                var totalBonus = bonuses
+                    .Where(b => b.BonusDate.Month == month &&
+                                b.BonusDate.Year == year)
+                    .Sum(b => b.Amount);
+
+                var overtimeAmount = overtime
+                    .Where(o => o.Status == "Approved" &&
+                                o.OvertimeDate.Month == month &&
+                                o.OvertimeDate.Year == year)
+                    .Sum(o => o.Amount);
+
+                var netSalary =
+                    salary.BasicSalary
+                    + totalAllowances
+                    + totalBonus
+                    + overtimeAmount
+                    - totalDeductions;
+
+                var item = new PayrollItem
+                {
+                    PayrollItemId = Guid.NewGuid(),
+                    PayrollId = createdPayroll.PayrollId,
+                    EmployeeId = salary.EmployeeId,
+                    BasicSalary = salary.BasicSalary,
+                    TotalComponents = totalAllowances,
+                    TotalBonus = totalBonus,
+                    OvertimeAmount = overtimeAmount,
+                    TotalDeductions = totalDeductions,
+                    NetSalary = netSalary
+                };
+
+                await _repo.AddPayrollItemAsync(item);
+            }
+
+            return Map(createdPayroll);
         }
 
         public async Task<IEnumerable<PayrollResponseDto>> GetPayrollsAsync()
@@ -254,24 +358,95 @@ namespace SalaryService.Services
         }
 
         // Payslip
-        public async Task<PayslipResponseDto> GeneratePayslipAsync(Guid payrollId, Guid employeeId)
+        // Payslip
+        public async Task<PayslipResponseDto> GeneratePayslipAsync(
+            Guid payrollId,
+            Guid employeeId)
         {
+            // Get payroll
+            var payroll = await _repo.GetPayrollByIdAsync(payrollId);
+
+            if (payroll == null)
+                throw new KeyNotFoundException("Payroll not found");
+
+            // Get CURRENT salary
+            var salary = await _repo.GetEmployeeSalaryByEmployeeIdAsync(employeeId);
+
+            if (salary == null)
+                throw new KeyNotFoundException("Employee salary not found");
+
+            // Get CURRENT salary components
+            var components =
+                await _repo.GetSalaryComponentsByEmployeeIdAsync(employeeId);
+
+            // Earnings
+            var totalAllowances = components
+                .Where(c => string.Equals(
+                    c.ComponentType?.Trim(),
+                    "Earning",
+                    StringComparison.OrdinalIgnoreCase))
+                .Sum(c => c.Amount);
+
+            // Deductions
+            var totalDeductions = components
+                .Where(c => string.Equals(
+                    c.ComponentType?.Trim(),
+                    "Deduction",
+                    StringComparison.OrdinalIgnoreCase))
+                .Sum(c => c.Amount);
+
+            // Get bonuses for payroll month/year
+            var bonuses =
+                await _repo.GetBonusesByEmployeeIdAsync(employeeId);
+
+            var totalBonus = bonuses
+                .Where(b =>
+                    b.BonusDate.Month == payroll.PayrollMonth &&
+                    b.BonusDate.Year == payroll.PayrollYear)
+                .Sum(b => b.Amount);
+
+            // Get approved overtime for payroll month/year
+            var overtime =
+                await _repo.GetOvertimeByEmployeeIdAsync(employeeId);
+
+            var overtimeAmount = overtime
+                .Where(o =>
+                    string.Equals(
+                        o.Status?.Trim(),
+                        "Approved",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    o.OvertimeDate.Month == payroll.PayrollMonth &&
+                    o.OvertimeDate.Year == payroll.PayrollYear)
+                .Sum(o => o.Amount);
+
+            // FINAL PAYSLIP CALCULATION
+            var netSalary =
+                salary.BasicSalary
+                + totalAllowances
+                + totalBonus
+                + overtimeAmount
+                - totalDeductions;
+
             var payslip = new Payslip
             {
                 PayslipId = Guid.NewGuid(),
                 PayrollId = payrollId,
                 EmployeeId = employeeId,
+
                 PayslipNumber = Guid.NewGuid().ToString(),
                 PayslipDate = DateTime.UtcNow,
-                BasicSalary = 0,
-                TotalComponents = 0,
-                TotalBonus = 0,
-                OvertimeAmount = 0,
-                TotalDeductions = 0,
-                NetSalary = 0
+
+                BasicSalary = salary.BasicSalary,
+                TotalComponents = totalAllowances,
+                TotalBonus = totalBonus,
+                OvertimeAmount = overtimeAmount,
+                TotalDeductions = totalDeductions,
+
+                NetSalary = netSalary
             };
 
             var created = await _repo.AddPayslipAsync(payslip);
+
             return Map(created);
         }
 

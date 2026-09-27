@@ -10,5 +10,7 @@ namespace LeaveService.Services
         Task<IEnumerable<LeaveResponseDto>> GetLeaveHistoryAsync(Guid employeeId);
         Task<LeaveResponseDto> ApproveLeaveAsync(Guid leaveId, Guid approverId);
         Task<LeaveResponseDto> RejectLeaveAsync(Guid leaveId, Guid approverId);
+
+        Task<IEnumerable<LeaveResponseDto>> GetAllLeavesAsync();
     }
 }

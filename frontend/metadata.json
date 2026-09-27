@@ -1,0 +1,6 @@
+{
+  "name": "Employee Management System",
+  "description": "Production-style enterprise React frontend for Employee Management System communicating with .NET 9 Web API Gateway.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

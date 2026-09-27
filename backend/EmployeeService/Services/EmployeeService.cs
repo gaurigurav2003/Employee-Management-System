@@ -136,8 +136,11 @@ namespace EmployeeService.Services
                 Role = e.Role,
                 EmploymentStatus = e.EmploymentStatus,
                 CreatedAt = e.CreatedAt,
-                UpdatedAt = e.UpdatedAt
+                UpdatedAt = e.UpdatedAt,
+                UserId = e.UserId,
             };
         }
+
+
     }
 }

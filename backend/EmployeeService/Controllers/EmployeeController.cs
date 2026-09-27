@@ -2,10 +2,11 @@
 using EmployeeService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace EmployeeService.Controllers
 {
-	[Authorize]
+    [Authorize]
     [ApiController]
     [Route("api/v1/employees")]
     [Produces("application/json")]
@@ -18,13 +19,18 @@ namespace EmployeeService.Controllers
             _employeeService = employeeService;
         }
 
+        // GET: api/v1/employees/{employeeId}
         [Authorize]
         [HttpGet("{employeeId}")]
-        public async Task<ActionResult<EmployeeResponseDto>> GetEmployeeById(Guid employeeId)
+        public async Task<ActionResult<EmployeeResponseDto>> GetEmployeeById(
+            Guid employeeId)
         {
             try
             {
-                var userIdClaim = User.FindFirst("userId")?.Value;
+                var userIdClaim =
+                    User.FindFirst("userId")?.Value
+                    ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? User.FindFirst("sub")?.Value;
 
                 if (string.IsNullOrEmpty(userIdClaim))
                     return Unauthorized();
@@ -32,12 +38,14 @@ namespace EmployeeService.Controllers
                 if (!Guid.TryParse(userIdClaim, out var userId))
                     return Unauthorized();
 
-                var myEmployee = await _employeeService.GetMyProfileAsync(userId);
+                var myEmployee =
+                    await _employeeService.GetMyProfileAsync(userId);
 
                 if (myEmployee.EmployeeId != employeeId)
                     return Forbid();
 
-                var employee = await _employeeService.GetEmployeeByIdAsync(employeeId);
+                var employee =
+                    await _employeeService.GetEmployeeByIdAsync(employeeId);
 
                 return Ok(employee);
             }
@@ -51,13 +59,17 @@ namespace EmployeeService.Controllers
             }
         }
 
+        // GET: api/v1/employees
         [Authorize(Roles = "Admin,HR,Manager")]
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<EmployeeResponseDto>>> GetAllEmployees()
+        public async Task<ActionResult<IEnumerable<EmployeeResponseDto>>>
+            GetAllEmployees()
         {
             try
             {
-                var employees = await _employeeService.GetAllEmployeesAsync();
+                var employees =
+                    await _employeeService.GetAllEmployeesAsync();
+
                 return Ok(employees);
             }
             catch (Exception)
@@ -66,14 +78,17 @@ namespace EmployeeService.Controllers
             }
         }
 
-
+        // GET: api/v1/employees/search?searchTerm=...
         [Authorize(Roles = "Admin,HR,Manager")]
         [HttpGet("search")]
-        public async Task<ActionResult<IEnumerable<EmployeeResponseDto>>> SearchEmployees([FromQuery] string searchTerm)
+        public async Task<ActionResult<IEnumerable<EmployeeResponseDto>>>
+            SearchEmployees([FromQuery] string searchTerm)
         {
             try
             {
-                var employees = await _employeeService.SearchEmployeesAsync(searchTerm);
+                var employees =
+                    await _employeeService.SearchEmployeesAsync(searchTerm);
+
                 return Ok(employees);
             }
             catch (ArgumentException ex)
@@ -86,14 +101,70 @@ namespace EmployeeService.Controllers
             }
         }
 
-        [Authorize(Roles = "Admin,HR")]
-        [HttpPost]
-        public async Task<ActionResult<EmployeeResponseDto>> CreateEmployee(EmployeeCreateDto employeeDto)
+        // GET: api/v1/employees/me
+        // Used by Employee, HR, Manager and Admin to get their own employee profile
+        [Authorize(Roles = "Employee,HR,Manager,Admin")]
+        [HttpGet("me")]
+        public async Task<ActionResult<EmployeeResponseDto>>
+            GetMyProfile()
         {
             try
             {
-                var employee = await _employeeService.CreateEmployeeAsync(employeeDto);
-                return CreatedAtAction(nameof(GetEmployeeById), new { employeeId = employee.EmployeeId }, employee);
+                var userIdClaim =
+                    User.FindFirst("userId")?.Value
+                    ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? User.FindFirst("sub")?.Value;
+
+                if (string.IsNullOrEmpty(userIdClaim))
+                {
+                    return Unauthorized(new
+                    {
+                        message = "User ID not found in token."
+                    });
+                }
+
+                if (!Guid.TryParse(userIdClaim, out var userId))
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Invalid user ID."
+                    });
+                }
+
+                var employee =
+                    await _employeeService.GetMyProfileAsync(userId);
+
+                return Ok(employee);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound(new
+                {
+                    message = "Employee profile not found."
+                });
+            }
+            catch (Exception)
+            {
+                return Problem("An unexpected error occurred.");
+            }
+        }
+
+        // POST: api/v1/employees
+        [Authorize(Roles = "Admin,HR")]
+        [HttpPost]
+        public async Task<ActionResult<EmployeeResponseDto>>
+            CreateEmployee(EmployeeCreateDto employeeDto)
+        {
+            try
+            {
+                var employee =
+                    await _employeeService.CreateEmployeeAsync(employeeDto);
+
+                return CreatedAtAction(
+                    nameof(GetEmployeeById),
+                    new { employeeId = employee.EmployeeId },
+                    employee
+                );
             }
             catch (ArgumentException ex)
             {
@@ -105,13 +176,22 @@ namespace EmployeeService.Controllers
             }
         }
 
+        // PUT: api/v1/employees/{employeeId}
         [Authorize(Roles = "Admin,HR")]
         [HttpPut("{employeeId}")]
-        public async Task<ActionResult<EmployeeResponseDto>> UpdateEmployee(Guid employeeId, EmployeeUpdateDto employeeDto)
+        public async Task<ActionResult<EmployeeResponseDto>>
+            UpdateEmployee(
+                Guid employeeId,
+                EmployeeUpdateDto employeeDto)
         {
             try
             {
-                var updated = await _employeeService.UpdateEmployeeAsync(employeeId, employeeDto);
+                var updated =
+                    await _employeeService.UpdateEmployeeAsync(
+                        employeeId,
+                        employeeDto
+                    );
+
                 return Ok(updated);
             }
             catch (ArgumentException ex)
@@ -128,42 +208,17 @@ namespace EmployeeService.Controllers
             }
         }
 
+        // DELETE: api/v1/employees/{employeeId}
         [Authorize(Roles = "Admin,HR")]
         [HttpDelete("{employeeId}")]
-        public async Task<IActionResult> DeleteEmployee(Guid employeeId)
+        public async Task<IActionResult>
+            DeleteEmployee(Guid employeeId)
         {
             try
             {
                 await _employeeService.DeleteEmployeeAsync(employeeId);
+
                 return NoContent();
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
-            }
-            catch (Exception)
-            {
-                return Problem("An unexpected error occurred.");
-            }
-        }
-
-        [HttpGet("me")]
-        [Authorize(Roles = "Employee")]
-        public async Task<ActionResult<EmployeeResponseDto>> GetMyProfile()
-        {
-            try
-            {
-                var userIdClaim = User.FindFirst("userId")?.Value;
-
-                if (string.IsNullOrEmpty(userIdClaim))
-                    return Unauthorized();
-
-                if (!Guid.TryParse(userIdClaim, out var userId))
-                    return Unauthorized();
-
-                var employee = await _employeeService.GetMyProfileAsync(userId);
-
-                return Ok(employee);
             }
             catch (KeyNotFoundException)
             {

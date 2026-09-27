@@ -90,7 +90,7 @@ namespace AttendanceService.Services
             }
 
             attendance.CheckOutTime =
-                dto.CheckOutTime ?? DateTime.Now;
+     dto.CheckOutTime ?? DateTime.UtcNow;
 
             if (!string.IsNullOrWhiteSpace(dto.Status))
             {
@@ -106,18 +106,40 @@ namespace AttendanceService.Services
         }
 
         private static AttendanceResponseDto MapToResponseDto(
-            Attendance attendance)
+     Attendance attendance)
         {
             return new AttendanceResponseDto
             {
                 AttendanceId = attendance.AttendanceId,
                 EmployeeId = attendance.EmployeeId,
                 AttendanceDate = attendance.AttendanceDate,
-                CheckInTime = attendance.CheckInTime,
-                CheckOutTime = attendance.CheckOutTime,
+
+                // Stored values are UTC.
+                // Mark them as UTC so the frontend converts them
+                // correctly to the user's local timezone.
+                CheckInTime = DateTime.SpecifyKind(
+                    attendance.CheckInTime,
+                    DateTimeKind.Utc
+                ),
+
+                CheckOutTime = attendance.CheckOutTime.HasValue
+                    ? DateTime.SpecifyKind(
+                        attendance.CheckOutTime.Value,
+                        DateTimeKind.Utc
+                    )
+                    : null,
+
                 Status = attendance.Status,
-                CreatedAt = attendance.CreatedAt,
-                UpdatedAt = attendance.UpdatedAt
+
+                CreatedAt = DateTime.SpecifyKind(
+                    attendance.CreatedAt,
+                    DateTimeKind.Utc
+                ),
+
+                UpdatedAt = DateTime.SpecifyKind(
+                    attendance.UpdatedAt,
+                    DateTimeKind.Utc
+                )
             };
         }
     }

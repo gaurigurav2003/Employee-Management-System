@@ -58,7 +58,7 @@ namespace SalaryService.Controllers
             }
         }
 
-        [Authorize(Roles = "Admin,HR")]
+       [Authorize(Roles = "Admin,HR,Employee")]
         [HttpGet("{employeeId}")]
         public async Task<ActionResult<EmployeeSalaryResponseDto>> GetSalary(Guid employeeId)
         {

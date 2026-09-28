@@ -113,7 +113,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // HTTPS
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 // Authentication
 app.UseAuthentication();

@@ -36,6 +36,9 @@ export const ProfilePage: React.FC = () => {
         if (user?.employeeId) {
           emp = await employeeApi.getById(user.employeeId).catch(() => null);
         }
+        if (!emp && user?.userId) {
+          emp = await employeeApi.getByUserId(user.userId).catch(() => null);
+        }
       }
 
       if (emp) {

@@ -1,4 +1,4 @@
-﻿using EmployeeService.DTOs;
+using EmployeeService.DTOs;
 
 namespace EmployeeService.Services
 {
@@ -13,6 +13,12 @@ namespace EmployeeService.Services
         Task<IEnumerable<EmployeeResponseDto>> SearchEmployeesAsync(string searchTerm);
 
         Task<EmployeeResponseDto> GetMyProfileAsync(Guid userId);
+
+        Task<EmployeeResponseDto> GetOrCreateProfileAsync(
+            Guid userId,
+            string? username,
+            string? email,
+            string? role);
 
         Task<EmployeeResponseDto> UpdateEmployeeAsync(
             Guid employeeId,

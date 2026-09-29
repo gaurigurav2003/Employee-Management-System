@@ -6,7 +6,6 @@ import { employeeApi } from '../api/employeeApi';
 import {
   SupportTicketResponseDto,
   SupportTicketCreateDto,
-  EmployeeResponseDto,
 } from '../types';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
@@ -18,53 +17,79 @@ import { EmptyState } from '../components/common/EmptyState';
 import {
   LifeBuoy,
   Send,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Play,
+  Check,
+  XCircle,
 } from 'lucide-react';
 
+const AREA_ROLE_MAPPING: Record<string, string> = {
+  HR: 'HR',
+  Admin: 'Admin',
+  Manager: 'Manager',
+  Support: 'Support',
+};
+
+const AREA_OPTIONS = [
+  { value: 'HR', label: 'HR' },
+  { value: 'Admin', label: 'Admin' },
+  { value: 'Manager', label: 'Manager' },
+  { value: 'Support', label: 'Support' },
+];
+
 export const SupportPage: React.FC = () => {
-  const { user, isAdmin, isSupport, isHR } = useAuth();
+  const { user, isAdmin, isSupport, isHR, isManager } = useAuth();
   const { success, error: toastError } = useToast();
 
   const [myTickets, setMyTickets] = useState<SupportTicketResponseDto[]>([]);
   const [teamTickets, setTeamTickets] = useState<SupportTicketResponseDto[]>([]);
   const [activeTab, setActiveTab] = useState<'my' | 'management'>('my');
-  const [supportStaff, setSupportStaff] = useState<EmployeeResponseDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Ticket creation form
+  // Ticket creation form state
+  const [selectedArea, setSelectedArea] = useState('HR');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('Medium');
 
-  // Assign & Status modals
+  // View modal state
   const [selectedTicket, setSelectedTicket] = useState<SupportTicketResponseDto | null>(null);
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [assigneeId, setAssigneeId] = useState('');
 
-  const canManageTickets = isAdmin || isSupport || isHR;
+  const canManageTickets = isAdmin || isSupport || isHR || isManager;
+  const assignedRoleForArea = AREA_ROLE_MAPPING[selectedArea] || 'HR';
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // 1. Load own tickets for all roles
-      if (user?.employeeId) {
-        const mine = await supportApi.getByEmployeeId(user.employeeId).catch(() => []);
+      let currentEmpId = user?.employeeId;
+      if (!currentEmpId && user?.userId) {
+        try {
+          const me = await employeeApi.getMe();
+          if (me?.employeeId) currentEmpId = me.employeeId;
+        } catch {
+          try {
+            const me = await employeeApi.getByUserId(user.userId);
+            if (me?.employeeId) currentEmpId = me.employeeId;
+          } catch {}
+        }
+      }
+
+      // 1. Load personal tickets for all roles
+      if (currentEmpId) {
+        const mine = await supportApi.getByEmployeeId(currentEmpId).catch(() => []);
         setMyTickets(Array.isArray(mine) ? mine : []);
       } else {
         setMyTickets([]);
       }
 
-      // 2. Load all tickets queue for management
+      // 2. Load all tickets queue for management roles
       if (canManageTickets) {
         const all = await supportApi.getAll().catch(() => []);
         setTeamTickets(Array.isArray(all) ? all : []);
-
-        const employees = await employeeApi.getAll().catch(() => []);
-        const staff = (employees || []).filter(
-          (e) => (e.role || '').toLowerCase().includes('support') || (e.role || '').toLowerCase().includes('admin')
-        );
-        setSupportStaff(staff.length > 0 ? staff : employees);
       }
     } catch {
       setMyTickets([]);
@@ -80,7 +105,20 @@ export const SupportPage: React.FC = () => {
 
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.employeeId) {
+    let empId = user?.employeeId;
+    if (!empId && user?.userId) {
+      try {
+        const me = await employeeApi.getMe();
+        if (me?.employeeId) empId = me.employeeId;
+      } catch {
+        try {
+          const me = await employeeApi.getByUserId(user.userId);
+          if (me?.employeeId) empId = me.employeeId;
+        } catch {}
+      }
+    }
+
+    if (!empId) {
       toastError('Employee profile is not loaded. Please make sure you are signed in.');
       return;
     }
@@ -91,39 +129,21 @@ export const SupportPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      const fullTitle = `[${selectedArea}] ${title.trim()}`;
       const dto: SupportTicketCreateDto = {
-        employeeId: user.employeeId,
-        title: title.trim(),
+        employeeId: empId,
+        title: fullTitle,
         description: description.trim(),
         priority,
       };
+
       await supportApi.create(dto);
-      success('Support ticket created successfully.');
+      success(`Support ticket submitted and routed to ${assignedRoleForArea} team.`);
       setTitle('');
       setDescription('');
       loadData();
     } catch (err: any) {
       toastError(err.message || 'Failed to create ticket.', 'Error', err.errors);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleAssignTicket = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTicket || !assigneeId) return;
-
-    setIsSubmitting(true);
-    try {
-      await supportApi.update(selectedTicket.ticketId, {
-        status: 'Assigned',
-        assignedTo: assigneeId,
-      });
-      success('Ticket assigned to staff member.');
-      setIsAssignModalOpen(false);
-      loadData();
-    } catch (err: any) {
-      toastError(err.message || 'Failed to assign ticket.');
     } finally {
       setIsSubmitting(false);
     }
@@ -139,6 +159,25 @@ export const SupportPage: React.FC = () => {
     }
   };
 
+  // Helper to extract area and assigned role from ticket
+  const getTicketMeta = (ticketTitle?: string | null) => {
+    const titleStr = ticketTitle || '';
+    for (const area of Object.keys(AREA_ROLE_MAPPING)) {
+      if (titleStr.startsWith(`[${area}]`)) {
+        return {
+          area,
+          assignedRole: AREA_ROLE_MAPPING[area],
+          cleanTitle: titleStr.replace(`[${area}]`, '').trim(),
+        };
+      }
+    }
+    return {
+      area: 'Support',
+      assignedRole: 'Support',
+      cleanTitle: titleStr,
+    };
+  };
+
   // Status counts for management tab
   const countOpen = teamTickets.filter((t) => (t.status || '').toLowerCase() === 'open').length;
   const countAssigned = teamTickets.filter((t) => (t.status || '').toLowerCase() === 'assigned').length;
@@ -148,19 +187,19 @@ export const SupportPage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-[11px] font-mono uppercase tracking-widest text-slate-400">
             WORKSPACE / SUPPORT
           </span>
-          <h2 className="text-xl font-bold text-slate-900 mt-1">Support</h2>
+          <h2 className="text-xl font-bold text-slate-900 mt-1">Support Tickets</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Create and manage workplace support tickets and requests.
+            Create and track workplace support requests routed by category.
           </p>
         </div>
 
-        {/* Tab switch for support staff / admin / HR */}
+        {/* Tab switch for support staff / admin / HR / manager */}
         {canManageTickets && (
           <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
@@ -199,27 +238,56 @@ export const SupportPage: React.FC = () => {
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
             <div className="mb-4">
               <h3 className="text-sm font-bold text-slate-900">Create a Support Ticket</h3>
-              <p className="text-xs text-slate-500">Submit an issue for the IT / operations team</p>
+              <p className="text-xs text-slate-500">
+                Select an area to automatically route your request to the appropriate team
+              </p>
             </div>
 
             <form onSubmit={handleCreateTicket} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <Select
+                    label="Select Area"
+                    value={selectedArea}
+                    onChange={(e) => setSelectedArea(e.target.value)}
+                    options={AREA_OPTIONS}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Assigned Role
+                  </label>
+                  <div className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 font-semibold flex items-center justify-between">
+                    <span>{assignedRoleForArea} Team</span>
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-[10px] font-bold uppercase">
+                      Auto-Routed
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <Select
+                    label="Priority"
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    options={[
+                      { value: 'Low', label: 'Low - General inquiry or minor request' },
+                      { value: 'Medium', label: 'Medium - Standard request' },
+                      { value: 'High', label: 'High - Urgent / blocking issue' },
+                    ]}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
                 <Input
                   label="Ticket Title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="What do you need help with?"
-                  required
-                />
-                <Select
-                  label="Priority"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  options={[
-                    { value: 'Low', label: 'Low - General inquiry or minor request' },
-                    { value: 'Medium', label: 'Medium - Standard service request' },
-                    { value: 'High', label: 'High - Urgent / blocking issue' },
-                  ]}
+                  placeholder="Summary of what you need assistance with..."
                   required
                 />
               </div>
@@ -232,7 +300,7 @@ export const SupportPage: React.FC = () => {
                   rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the issue in detail..."
+                  placeholder="Describe your request or issue in detail..."
                   required
                   maxLength={2000}
                   className="w-full text-xs p-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-900 placeholder:text-slate-400"
@@ -277,6 +345,8 @@ export const SupportPage: React.FC = () => {
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                       <th className="py-3 px-4">Ticket ID</th>
+                      <th className="py-3 px-4">Area</th>
+                      <th className="py-3 px-4">Assigned Role</th>
                       <th className="py-3 px-4">Title</th>
                       <th className="py-3 px-4">Priority</th>
                       <th className="py-3 px-4">Status</th>
@@ -285,49 +355,61 @@ export const SupportPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {myTickets.map((t) => (
-                      <tr key={t.ticketId} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4 font-mono font-medium text-slate-600">
-                          {t.ticketId?.slice(0, 8).toUpperCase()}...
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-slate-900">{t.title}</div>
-                          <div className="text-[11px] text-slate-400 max-w-sm truncate">
-                            {t.description}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
-                              t.priority === 'High'
-                                ? 'bg-rose-100 text-rose-800'
-                                : t.priority === 'Medium'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-slate-100 text-slate-700'
-                            }`}
-                          >
-                            {t.priority}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <StatusBadge status={t.status || 'Open'} />
-                        </td>
-                        <td className="py-3 px-4 text-slate-600">
-                          {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '-'}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            onClick={() => {
-                              setSelectedTicket(t);
-                              setIsViewModalOpen(true);
-                            }}
-                            className="px-2 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded text-xs"
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {myTickets.map((t) => {
+                      const meta = getTicketMeta(t.title);
+
+                      return (
+                        <tr key={t.ticketId} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-4 font-mono font-medium text-slate-600">
+                            {t.ticketId?.slice(0, 8).toUpperCase()}...
+                          </td>
+                          <td className="py-3 px-4 font-medium text-slate-700">
+                            {meta.area}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">
+                              {meta.assignedRole}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-900">{meta.cleanTitle}</div>
+                            <div className="text-[11px] text-slate-400 max-w-xs truncate">
+                              {t.description}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                t.priority === 'High'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : t.priority === 'Medium'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              {t.priority}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <StatusBadge status={t.status || 'Open'} />
+                          </td>
+                          <td className="py-3 px-4 text-slate-600">
+                            {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '-'}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              onClick={() => {
+                                setSelectedTicket(t);
+                                setIsViewModalOpen(true);
+                              }}
+                              className="px-2 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded text-xs font-medium"
+                            >
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -368,7 +450,9 @@ export const SupportPage: React.FC = () => {
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">All Support Tickets Queue</h3>
-                <p className="text-xs text-slate-500">Live request feed from SupportService</p>
+                <p className="text-xs text-slate-500">
+                  Role-routed workflow: Open → Assigned → In Progress → Resolved → Closed
+                </p>
               </div>
               <span className="text-xs font-mono text-slate-400">Total: {teamTickets.length}</span>
             </div>
@@ -378,7 +462,7 @@ export const SupportPage: React.FC = () => {
             ) : teamTickets.length === 0 ? (
               <EmptyState
                 title="No support tickets in queue"
-                description="All support requests will appear here for assignment and review."
+                description="All support requests will appear here for management and resolution."
                 icon={<LifeBuoy className="w-6 h-6" />}
               />
             ) : (
@@ -387,25 +471,35 @@ export const SupportPage: React.FC = () => {
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                       <th className="py-3 px-4">Ticket ID</th>
+                      <th className="py-3 px-4">Area</th>
+                      <th className="py-3 px-4">Assigned Role</th>
                       <th className="py-3 px-4">Title</th>
                       <th className="py-3 px-4">Priority</th>
-                      <th className="py-3 px-4">Assigned To</th>
                       <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
+                      <th className="py-3 px-4 text-right">Workflow Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {teamTickets.map((t) => {
                       const status = (t.status || 'Open').toLowerCase();
+                      const meta = getTicketMeta(t.title);
 
                       return (
                         <tr key={t.ticketId} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3 px-4 font-mono font-medium text-slate-600">
                             {t.ticketId?.slice(0, 8).toUpperCase()}...
                           </td>
+                          <td className="py-3 px-4 font-medium text-slate-700">
+                            {meta.area}
+                          </td>
                           <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-900">{t.title}</div>
-                            <div className="text-[11px] text-slate-400 max-w-sm truncate">
+                            <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+                              {meta.assignedRole}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-900">{meta.cleanTitle}</div>
+                            <div className="text-[11px] text-slate-400 max-w-xs truncate">
                               {t.description}
                             </div>
                           </td>
@@ -422,9 +516,6 @@ export const SupportPage: React.FC = () => {
                               {t.priority}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-slate-600 font-mono">
-                            {t.assignedTo ? `${t.assignedTo.slice(0, 8)}...` : 'Unassigned'}
-                          </td>
                           <td className="py-3 px-4">
                             <StatusBadge status={t.status || 'Open'} />
                           </td>
@@ -435,49 +526,64 @@ export const SupportPage: React.FC = () => {
                                   setSelectedTicket(t);
                                   setIsViewModalOpen(true);
                                 }}
-                                className="px-2 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded text-xs"
+                                className="px-2 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded text-xs font-medium"
                               >
                                 View
                               </button>
 
-                              {status === 'open' && (
-                                <button
-                                  onClick={() => {
-                                    setSelectedTicket(t);
-                                    setIsAssignModalOpen(true);
-                                  }}
-                                  className="px-2 py-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded text-xs font-medium"
-                                >
-                                  Assign
-                                </button>
-                              )}
+                              {(() => {
+                                const isRequester = !!user?.employeeId && t.employeeId === user.employeeId;
 
-                              {status === 'assigned' && (
-                                <button
-                                  onClick={() => handleUpdateStatus(t.ticketId, 'InProgress')}
-                                  className="px-2 py-1 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded text-xs font-medium"
-                                >
-                                  Start
-                                </button>
-                              )}
+                                if (isRequester && (status === 'inprogress' || status === 'resolved')) {
+                                  return (
+                                    <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                      Requester (Cannot {status === 'inprogress' ? 'Resolve' : 'Close'})
+                                    </span>
+                                  );
+                                }
 
-                              {status === 'inprogress' && (
-                                <button
-                                  onClick={() => handleUpdateStatus(t.ticketId, 'Resolved')}
-                                  className="px-2 py-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded text-xs font-medium"
-                                >
-                                  Resolve
-                                </button>
-                              )}
+                                return (
+                                  <>
+                                    {status === 'open' && (
+                                      <button
+                                        onClick={() => handleUpdateStatus(t.ticketId, 'Assigned')}
+                                        className="px-2.5 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-xs font-medium"
+                                      >
+                                        Accept & Assign
+                                      </button>
+                                    )}
 
-                              {status === 'resolved' && (
-                                <button
-                                  onClick={() => handleUpdateStatus(t.ticketId, 'Closed')}
-                                  className="px-2 py-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded text-xs font-medium"
-                                >
-                                  Close
-                                </button>
-                              )}
+                                    {status === 'assigned' && (
+                                      <button
+                                        onClick={() => handleUpdateStatus(t.ticketId, 'InProgress')}
+                                        className="px-2.5 py-1 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded text-xs font-medium flex items-center gap-1"
+                                      >
+                                        <Play className="w-3 h-3" />
+                                        Start Progress
+                                      </button>
+                                    )}
+
+                                    {status === 'inprogress' && (
+                                      <button
+                                        onClick={() => handleUpdateStatus(t.ticketId, 'Resolved')}
+                                        className="px-2.5 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded text-xs font-medium flex items-center gap-1"
+                                      >
+                                        <Check className="w-3 h-3" />
+                                        Resolve
+                                      </button>
+                                    )}
+
+                                    {status === 'resolved' && (
+                                      <button
+                                        onClick={() => handleUpdateStatus(t.ticketId, 'Closed')}
+                                        className="px-2.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-xs font-medium"
+                                      >
+                                        Close
+                                      </button>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           </td>
                         </tr>
@@ -490,38 +596,6 @@ export const SupportPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* ASSIGN TICKET MODAL */}
-      <Modal
-        isOpen={isAssignModalOpen}
-        onClose={() => setIsAssignModalOpen(false)}
-        title="Assign Support Ticket"
-        subtitle={`Assign ticket: ${selectedTicket?.title}`}
-        footer={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setIsAssignModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" size="sm" onClick={handleAssignTicket} isLoading={isSubmitting}>
-              Assign Ticket
-            </Button>
-          </>
-        }
-      >
-        <form onSubmit={handleAssignTicket} className="space-y-4">
-          <Select
-            label="Assign to Staff Member"
-            value={assigneeId}
-            onChange={(e) => setAssigneeId(e.target.value)}
-            options={supportStaff.map((s) => ({
-              value: s.employeeId,
-              label: `${s.firstName} ${s.lastName} (${s.role || 'Support'})`,
-            }))}
-            placeholder="Select a support staff member"
-            required
-          />
-        </form>
-      </Modal>
 
       {/* VIEW TICKET MODAL */}
       <Modal
@@ -538,35 +612,48 @@ export const SupportPage: React.FC = () => {
       >
         {selectedTicket && (
           <div className="space-y-4 text-xs">
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
-              <h4 className="font-bold text-sm text-slate-900 mb-1">{selectedTicket.title}</h4>
-              <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">
-                {selectedTicket.description}
-              </p>
-            </div>
+            {(() => {
+              const meta = getTicketMeta(selectedTicket.title);
+              return (
+                <>
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-semibold text-[11px]">
+                        Area: {meta.area}
+                      </span>
+                      <span className="px-2 py-0.5 bg-slate-200 text-slate-800 rounded font-semibold text-[11px]">
+                        Assigned Role: {meta.assignedRole}
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-900 mb-1">{meta.cleanTitle}</h4>
+                    <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">
+                      {selectedTicket.description}
+                    </p>
+                  </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-400 block mb-1">PRIORITY</span>
-                <span className="font-semibold text-slate-900">{selectedTicket.priority}</span>
-              </div>
-              <div className="p-3 rounded-lg border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-400 block mb-1">STATUS</span>
-                <StatusBadge status={selectedTicket.status || 'Open'} />
-              </div>
-              <div className="p-3 rounded-lg border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-400 block mb-1">ASSIGNED TO</span>
-                <span className="font-mono text-slate-700">
-                  {selectedTicket.assignedTo || 'Unassigned'}
-                </span>
-              </div>
-              <div className="p-3 rounded-lg border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-400 block mb-1">CREATED DATE</span>
-                <span className="text-slate-700">
-                  {selectedTicket.createdAt ? new Date(selectedTicket.createdAt).toLocaleDateString() : '-'}
-                </span>
-              </div>
-            </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-lg border border-slate-200">
+                      <span className="text-[11px] font-semibold text-slate-400 block mb-1">PRIORITY</span>
+                      <span className="font-semibold text-slate-900">{selectedTicket.priority}</span>
+                    </div>
+                    <div className="p-3 rounded-lg border border-slate-200">
+                      <span className="text-[11px] font-semibold text-slate-400 block mb-1">STATUS</span>
+                      <StatusBadge status={selectedTicket.status || 'Open'} />
+                    </div>
+                    <div className="p-3 rounded-lg border border-slate-200">
+                      <span className="text-[11px] font-semibold text-slate-400 block mb-1">ASSIGNED ROLE</span>
+                      <span className="font-semibold text-slate-800">{meta.assignedRole}</span>
+                    </div>
+                    <div className="p-3 rounded-lg border border-slate-200">
+                      <span className="text-[11px] font-semibold text-slate-400 block mb-1">CREATED DATE</span>
+                      <span className="text-slate-700">
+                        {selectedTicket.createdAt ? new Date(selectedTicket.createdAt).toLocaleDateString() : '-'}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
       </Modal>

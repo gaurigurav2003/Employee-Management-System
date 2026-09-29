@@ -1,4 +1,4 @@
-﻿using EmployeeService.Data;
+using EmployeeService.Data;
 using EmployeeService.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,6 +30,16 @@ namespace EmployeeService.Repositories
             return await _context.Employees
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.UserId == userId);
+        }
+
+        public async Task<Employee?> GetByEmailAsync(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return null;
+
+            var lower = email.ToLower();
+            return await _context.Employees
+                .FirstOrDefaultAsync(e => e.Email.ToLower() == lower);
         }
 
         public async Task<IEnumerable<Employee>> GetAllAsync()

@@ -24,17 +24,25 @@ namespace AuthService.Security
             _expiresMinutes = int.TryParse(_configuration["Jwt:ExpiresMinutes"], out var m) ? m : 60;
         }
 
-        public (string Token, DateTime ExpiresAt) GenerateToken(Guid userId, string username, string role)
+        public (string Token, DateTime ExpiresAt) GenerateToken(Guid userId, string username, string role, string? email = null)
         {
             var expires = DateTime.UtcNow.AddMinutes(_expiresMinutes);
 
-            var claims = new[]
+            var claimsList = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
                 new Claim("userId", userId.ToString()),
                 new Claim(ClaimTypes.Name, username),
                 new Claim(ClaimTypes.Role, role)
             };
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                claimsList.Add(new Claim(ClaimTypes.Email, email));
+                claimsList.Add(new Claim("email", email));
+            }
+
+            var claims = claimsList.ToArray();
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_key));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

@@ -1,4 +1,4 @@
-﻿using EmployeeService.Models;
+using EmployeeService.Models;
 
 namespace EmployeeService.Repositories
 {
@@ -9,6 +9,8 @@ namespace EmployeeService.Repositories
         Task<Employee?> GetByIdAsync(Guid employeeId);
 
         Task<Employee?> GetByUserIdAsync(Guid userId);
+
+        Task<Employee?> GetByEmailAsync(string email);
 
         Task<IEnumerable<Employee>> GetAllAsync();
 

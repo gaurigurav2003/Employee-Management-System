@@ -9,6 +9,7 @@ import { Select } from '../components/common/Select';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { EmptyState } from '../components/common/EmptyState';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { employeeApi } from '../api/employeeApi';
 import {
   CalendarCheck,
   Check,
@@ -39,10 +40,23 @@ export const LeavePage: React.FC = () => {
     setIsLoading(true);
 
     try {
+      let currentEmpId = user?.employeeId;
+      if (!currentEmpId && user?.userId) {
+        try {
+          const me = await employeeApi.getMe();
+          if (me?.employeeId) currentEmpId = me.employeeId;
+        } catch {
+          try {
+            const me = await employeeApi.getByUserId(user.userId);
+            if (me?.employeeId) currentEmpId = me.employeeId;
+          } catch {}
+        }
+      }
+
       // 1. Always load own leave history if employeeId exists
-      if (user?.employeeId) {
+      if (currentEmpId) {
         const myData = await leaveApi
-          .getHistoryByEmployeeId(user.employeeId)
+          .getHistoryByEmployeeId(currentEmpId)
           .catch(() => []);
         setMyLeaves(Array.isArray(myData) ? myData : []);
       } else {
@@ -69,7 +83,20 @@ export const LeavePage: React.FC = () => {
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!user?.employeeId) {
+    let empId = user?.employeeId;
+    if (!empId && user?.userId) {
+      try {
+        const me = await employeeApi.getMe();
+        if (me?.employeeId) empId = me.employeeId;
+      } catch {
+        try {
+          const me = await employeeApi.getByUserId(user.userId);
+          if (me?.employeeId) empId = me.employeeId;
+        } catch {}
+      }
+    }
+
+    if (!empId) {
       toastError('Employee profile not loaded. Please ensure you are logged in with an active employee account.');
       return;
     }
@@ -88,7 +115,7 @@ export const LeavePage: React.FC = () => {
 
     try {
       const dto: LeaveCreateDto = {
-        employeeId: user.employeeId,
+        employeeId: empId,
         leaveType,
         startDate: new Date(startDate).toISOString(),
         endDate: new Date(endDate).toISOString(),

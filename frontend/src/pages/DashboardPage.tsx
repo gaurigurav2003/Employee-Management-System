@@ -321,22 +321,30 @@ export const DashboardPage: React.FC = () => {
 
                       {(isAdmin || isHR || isManager) && (
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => handleApproveLeave(l.leaveId)}
-                            disabled={processingLeaveId === l.leaveId}
-                            className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
-                            title="Approve leave"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleRejectLeave(l.leaveId)}
-                            disabled={processingLeaveId === l.leaveId}
-                            className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors"
-                            title="Reject leave"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          {l.employeeId === user?.employeeId ? (
+                            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                              Self (No Approval)
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleApproveLeave(l.leaveId)}
+                                disabled={processingLeaveId === l.leaveId}
+                                className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                                title="Approve leave"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleRejectLeave(l.leaveId)}
+                                disabled={processingLeaveId === l.leaveId}
+                                className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors"
+                                title="Reject leave"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

@@ -102,7 +102,7 @@ namespace AuthService.Services
             if (!user.IsActive)
                 throw new InvalidOperationException("Account is not yet activated. Please use the activation link sent to your email.");
 
-            var (token, expires) = _jwtService.GenerateToken(user.UserId, user.Username, user.Role);
+            var (token, expires) = _jwtService.GenerateToken(user.UserId, user.Username, user.Role, user.Email);
 
             return new LoginResponseDto
             {

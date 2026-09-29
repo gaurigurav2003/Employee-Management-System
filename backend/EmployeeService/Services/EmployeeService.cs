@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -69,6 +69,57 @@ namespace EmployeeService.Services
                 throw new KeyNotFoundException("Employee profile not found.");
 
             return MapToResponseDto(employee);
+        }
+
+        public async Task<EmployeeResponseDto> GetOrCreateProfileAsync(
+            Guid userId,
+            string? username,
+            string? email,
+            string? role)
+        {
+            var employee = await _employeeRepository.GetByUserIdAsync(userId);
+            if (employee != null)
+            {
+                return MapToResponseDto(employee);
+            }
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                var byEmail = await _employeeRepository.GetByEmailAsync(email);
+                if (byEmail != null)
+                {
+                    byEmail.UserId = userId;
+                    var updated = await _employeeRepository.UpdateAsync(byEmail);
+                    return MapToResponseDto(updated);
+                }
+            }
+
+            // Auto-create employee record for authenticated user (e.g. Admin or newly activated accounts)
+            var allEmployees = await _employeeRepository.GetAllAsync();
+            var defaultDeptId = allEmployees.FirstOrDefault()?.DepartmentId ?? Guid.Parse("08A560B2-EC53-46B6-B81E-E5AE3626F1BD");
+
+            var effectiveRole = !string.IsNullOrWhiteSpace(role) ? role : "Employee";
+            var effectiveName = !string.IsNullOrWhiteSpace(username) ? (username.Contains('@') ? username.Split('@')[0] : username) : "User";
+            var effectiveEmail = !string.IsNullOrWhiteSpace(email) ? email : (!string.IsNullOrWhiteSpace(username) && username.Contains('@') ? username : $"{username ?? "user"}@ems.com");
+
+            var newEmployee = new Employee
+            {
+                EmployeeId = Guid.NewGuid(),
+                UserId = userId,
+                FirstName = effectiveName,
+                LastName = effectiveRole,
+                Email = effectiveEmail,
+                Phone = "000-000-0000",
+                DateOfJoining = DateTime.UtcNow,
+                DepartmentId = defaultDeptId,
+                Role = effectiveRole,
+                EmploymentStatus = "Active",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            var created = await _employeeRepository.AddAsync(newEmployee);
+            return MapToResponseDto(created);
         }
 
         public async Task<IEnumerable<EmployeeResponseDto>> GetAllEmployeesAsync()

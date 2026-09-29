@@ -48,17 +48,14 @@ namespace EmployeeService.Controllers
                     });
                 }
 
+                var username = User.FindFirst(ClaimTypes.Name)?.Value ?? User.FindFirst("unique_name")?.Value ?? "User";
+                var email = User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst("email")?.Value;
+                var role = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("role")?.Value ?? "Employee";
+
                 var employee =
-                    await _employeeService.GetMyProfileAsync(userId);
+                    await _employeeService.GetOrCreateProfileAsync(userId, username, email, role);
 
                 return Ok(employee);
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound(new
-                {
-                    message = "Employee profile not found."
-                });
             }
             catch (Exception)
             {

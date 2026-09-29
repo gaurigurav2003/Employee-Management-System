@@ -9,9 +9,8 @@ interface AuthContextType {
   user: UserSession | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string, rememberMe?: boolean, previewRole?: UserRole) => Promise<UserSession>;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<UserSession>;
   logout: () => void;
-  setUserRolePreview: (role: UserRole) => void;
   isAdmin: boolean;
   isHR: boolean;
   isManager: boolean;
@@ -66,34 +65,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [handleLogout, warning, toastError]);
 
-  // Load existing session on initial load
+  // Load existing session on initial load and ensure employeeId is populated
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem('ems_auth_token') || sessionStorage.getItem('ems_auth_token');
-      const storedSession = localStorage.getItem('ems_user_session') || sessionStorage.getItem('ems_user_session');
+    const initSession = async () => {
+      try {
+        const storedToken = localStorage.getItem('ems_auth_token') || sessionStorage.getItem('ems_auth_token');
+        const storedSession = localStorage.getItem('ems_user_session') || sessionStorage.getItem('ems_user_session');
 
-      if (storedToken && storedSession) {
-        const parsed = JSON.parse(storedSession) as UserSession;
-        // Check if token expired
-        const jwt = parseJwt(storedToken);
-        if (jwt && jwt.exp && jwt.exp * 1000 < Date.now()) {
-          handleLogout();
-        } else {
+        if (storedToken && storedSession) {
+          const parsed = JSON.parse(storedSession) as UserSession;
+          // Check if token expired
+          const jwt = parseJwt(storedToken);
+          if (jwt && jwt.exp && jwt.exp * 1000 < Date.now()) {
+            handleLogout();
+            return;
+          }
+
+          // If employeeId is missing in stored session, resolve it from EmployeeService
+          if (!parsed.employeeId) {
+            try {
+              const employee = await employeeApi.getMe();
+              if (employee && employee.employeeId) {
+                parsed.employeeId = employee.employeeId;
+                if (localStorage.getItem('ems_user_session')) {
+                  localStorage.setItem('ems_user_session', JSON.stringify(parsed));
+                } else {
+                  sessionStorage.setItem('ems_user_session', JSON.stringify(parsed));
+                }
+              }
+            } catch {
+              if (parsed.userId) {
+                try {
+                  const employee = await employeeApi.getByUserId(parsed.userId);
+                  if (employee && employee.employeeId) {
+                    parsed.employeeId = employee.employeeId;
+                    if (localStorage.getItem('ems_user_session')) {
+                      localStorage.setItem('ems_user_session', JSON.stringify(parsed));
+                    } else {
+                      sessionStorage.setItem('ems_user_session', JSON.stringify(parsed));
+                    }
+                  }
+                } catch {
+                  // Profile might not exist yet
+                }
+              }
+            }
+          }
+
           setUser(parsed);
         }
+      } catch {
+        handleLogout();
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
-      handleLogout();
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    initSession();
   }, [handleLogout]);
 
   const login = async (
     username: string,
     password: string,
-    rememberMe: boolean = false,
-    previewRole?: UserRole
+    rememberMe: boolean = false
   ): Promise<UserSession> => {
     const response = await authApi.login({ username, password });
 
@@ -118,12 +152,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Parse claims from JWT
     const claims = parseJwt(token) || {};
+
+    // Role must come from the server response or JWT claim — never from client input
     const claimRole =
       serverRole ||
       claims['role'] ||
       claims['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ||
       claims['Role'] ||
-      previewRole ||
       'Employee';
 
     // Normalize role string to valid UserRole
@@ -135,36 +170,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     else if (lowerRole.includes('support')) finalRole = 'Support';
     else finalRole = 'Employee';
 
-    // If user explicitly picked a preview role on login screen for testing, allow it
-    if (previewRole) {
-      finalRole = previewRole;
-    }
-
     const resolvedUserId =
       userId ||
       claims['sub'] ||
       claims['userId'] ||
       claims['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ||
-      'user-' + Math.random().toString(36).substring(2, 7);
+      '';
 
     let resolvedEmployeeId =
-  employeeId ||
-  claims['employeeId'] ||
-  claims['EmployeeId'] ||
-  claims['emp_id'] ||
-  '';
+      employeeId ||
+      claims['employeeId'] ||
+      claims['EmployeeId'] ||
+      claims['emp_id'] ||
+      '';
 
-if (!resolvedEmployeeId && finalRole === 'Employee') {
-  sessionStorage.setItem('ems_auth_token', token);
+    // Temporarily set token so API calls like getMe() or getByUserId() have Authorization header
+    sessionStorage.setItem('ems_auth_token', token);
+    if (rememberMe) {
+      localStorage.setItem('ems_auth_token', token);
+    }
 
-  try {
-    const employee = await employeeApi.getMe();
-    resolvedEmployeeId = employee.employeeId;
-  } catch {
-    sessionStorage.removeItem('ems_auth_token');
-    throw new Error('Unable to retrieve employee profile after login.');
-  }
-}
+    // Retrieve the employee record using the authenticated UserId to get the real EmployeeId
+    if (!resolvedEmployeeId) {
+      try {
+        const employee = await employeeApi.getMe();
+        if (employee && employee.employeeId) {
+          resolvedEmployeeId = employee.employeeId;
+        }
+      } catch {
+        if (resolvedUserId) {
+          try {
+            const employee = await employeeApi.getByUserId(resolvedUserId);
+            if (employee && employee.employeeId) {
+              resolvedEmployeeId = employee.employeeId;
+            }
+          } catch {
+            // Profile may not exist yet for pure admin/support accounts without employee profiles
+            resolvedEmployeeId = '';
+          }
+        }
+      }
+    }
+
     const session: UserSession = {
       token,
       userId: resolvedUserId,
@@ -191,17 +238,6 @@ if (!resolvedEmployeeId && finalRole === 'Employee') {
     return session;
   };
 
-  const setUserRolePreview = (newRole: UserRole) => {
-    if (!user) return;
-    const updated = { ...user, role: newRole };
-    setUser(updated);
-    if (localStorage.getItem('ems_user_session')) {
-      localStorage.setItem('ems_user_session', JSON.stringify(updated));
-    } else {
-      sessionStorage.setItem('ems_user_session', JSON.stringify(updated));
-    }
-  };
-
   const isAdmin = user?.role === 'Admin';
   const isHR = user?.role === 'HR';
   const isManager = user?.role === 'Manager';
@@ -216,7 +252,6 @@ if (!resolvedEmployeeId && finalRole === 'Employee') {
         isLoading,
         login,
         logout: handleLogout,
-        setUserRolePreview,
         isAdmin,
         isHR,
         isManager,

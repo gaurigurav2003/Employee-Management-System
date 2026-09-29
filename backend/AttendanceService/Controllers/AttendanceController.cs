@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace AttendanceService.Controllers
 {
-	[Authorize]
+    [Authorize]
     [ApiController]
     [Route("api/v1/attendance")]
     public class AttendanceController : ControllerBase
@@ -14,17 +14,17 @@ namespace AttendanceService.Controllers
         private readonly EmployeeServiceClient _employeeServiceClient;
 
         public AttendanceController(
-      IAttendanceService service,
-      EmployeeServiceClient employeeServiceClient)
+            IAttendanceService service,
+            EmployeeServiceClient employeeServiceClient)
         {
             _service = service;
             _employeeServiceClient = employeeServiceClient;
         }
 
-        [Authorize(Roles = "Employee")]
+        // Check In (Self-service for any employee-linked role: Employee, HR, Manager, Admin, Support)
+        [Authorize]
         [HttpPost("check-in")]
-        public async Task<IActionResult> CheckIn(
-     [FromBody] AttendanceCreateDto dto)
+        public async Task<IActionResult> CheckIn([FromBody] AttendanceCreateDto dto)
         {
             try
             {
@@ -59,6 +59,8 @@ namespace AttendanceService.Controllers
             }
         }
 
+        // Get Attendance record by attendanceId
+        [Authorize]
         [HttpGet("{attendanceId}")]
         public async Task<IActionResult> GetById(Guid attendanceId)
         {
@@ -72,7 +74,8 @@ namespace AttendanceService.Controllers
                 });
             }
 
-            if (User.IsInRole("Employee"))
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Manager");
+            if (!isPrivileged)
             {
                 var employee = await _employeeServiceClient.GetMyEmployeeAsync();
 
@@ -94,10 +97,12 @@ namespace AttendanceService.Controllers
         }
 
         // Get Employee Attendance History
+        [Authorize]
         [HttpGet("employee/{employeeId}")]
         public async Task<IActionResult> GetByEmployee(Guid employeeId)
         {
-            if (User.IsInRole("Employee"))
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Manager");
+            if (!isPrivileged)
             {
                 var employee = await _employeeServiceClient.GetMyEmployeeAsync();
 
@@ -120,7 +125,7 @@ namespace AttendanceService.Controllers
             return Ok(result);
         }
 
-        // Get All Attendance
+        // Get All Attendance (Management queue for Admin / HR / Manager)
         [Authorize(Roles = "Admin,HR,Manager")]
         [HttpGet]
         public async Task<IActionResult> GetAll()
@@ -130,11 +135,12 @@ namespace AttendanceService.Controllers
             return Ok(result);
         }
 
-        [Authorize(Roles = "Employee")]
+        // Check Out (Self-service for any employee-linked role)
+        [Authorize]
         [HttpPut("{attendanceId}/check-out")]
         public async Task<IActionResult> CheckOut(
-      Guid attendanceId,
-      [FromBody] AttendanceUpdateDto dto)
+            Guid attendanceId,
+            [FromBody] AttendanceUpdateDto dto)
         {
             var attendance = await _service.GetByIdAsync(attendanceId);
 

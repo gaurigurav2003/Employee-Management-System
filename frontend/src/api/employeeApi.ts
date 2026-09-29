@@ -18,6 +18,12 @@ export const employeeApi = {
     });
   },
 
+  getByUserId: async (userId: string) => {
+    return apiClient<EmployeeResponseDto>(`/api/v1/employees/by-user/${userId}`, {
+      method: 'GET',
+    });
+  },
+
   create: async (dto: EmployeeCreateDto) => {
     return apiClient<EmployeeResponseDto>('/api/v1/employees', {
       method: 'POST',

@@ -28,6 +28,12 @@ namespace AuthService.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("ActivationTokenExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ActivationTokenHash")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 

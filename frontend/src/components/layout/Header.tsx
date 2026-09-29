@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useGatewayConfig } from '../../context/GatewayConfigContext';
 import { GatewaySettingsModal } from '../common/GatewaySettingsModal';
-import { Server, CheckCircle2, AlertTriangle, Shield } from 'lucide-react';
+import { Server, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { UserRole } from '../../types';
 
 export const Header: React.FC = () => {
-  const { user, setUserRolePreview } = useAuth();
+  const { user } = useAuth();
   const { isOnline, gatewayUrl } = useGatewayConfig();
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const navigate = useNavigate();
@@ -23,8 +22,6 @@ export const Header: React.FC = () => {
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     return name.slice(0, 2).toUpperCase();
   };
-
-  const roles: UserRole[] = ['Admin', 'HR', 'Manager', 'Employee', 'Support'];
 
   return (
     <>
@@ -57,26 +54,11 @@ export const Header: React.FC = () => {
             )}
           </button>
 
-          {/* Role Preview Switcher (As permitted in Wireframe 1 & SRS notes) */}
-          <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-            <Shield className="w-3.5 h-3.5 text-slate-400" />
-            <label htmlFor="role-select" className="text-[11px] font-medium text-slate-500 mr-1 hidden md:inline">
-              Role:
-            </label>
-            <select
-              id="role-select"
-              value={user?.role || 'Employee'}
-              onChange={(e) => setUserRolePreview(e.target.value as UserRole)}
-              className="text-xs font-semibold text-slate-800 bg-transparent border-none focus:ring-0 cursor-pointer"
-            >
-              {roles.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
+          {/* Role badge (read-only — role comes from JWT) */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+            <span className="text-[11px] font-medium text-slate-500 hidden md:inline">Role:</span>
+            <span className="text-xs font-semibold text-slate-800">{user?.role || '—'}</span>
           </div>
-
 
           {/* User Profile Pill */}
           <div

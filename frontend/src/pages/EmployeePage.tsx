@@ -2,12 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { employeeApi } from '../api/employeeApi';
+import { authApi } from '../api/authApi';
 import { departmentApi } from '../api/departmentApi';
 import {
   EmployeeResponseDto,
   EmployeeCreateDto,
   EmployeeUpdateDto,
   DepartmentResponseDto,
+  CreateAccountResponseDto,
 } from '../types';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
@@ -23,15 +25,95 @@ import {
   Filter,
   Plus,
   Users,
-  Eye,
-  Pencil,
-  Trash2,
-  Mail,
-  Phone,
-  Calendar,
-  Building2,
-  Briefcase,
+  Copy,
+  CheckCircle,
 } from 'lucide-react';
+
+// ── Role options based on logged-in user's role ────────────────────────────
+function getAllowedRoles(userRole: string): { value: string; label: string }[] {
+  if (userRole === 'Admin') {
+    return [
+      { value: 'HR', label: 'HR' },
+      { value: 'Manager', label: 'Manager' },
+    ];
+  }
+  if (userRole === 'HR') {
+    return [
+      { value: 'Employee', label: 'Employee' },
+      { value: 'Support', label: 'Support Staff' },
+    ];
+  }
+  if (userRole === 'Manager') {
+    return [{ value: 'Employee', label: 'Employee' }];
+  }
+  return [];
+}
+
+// ── Success panel after employee + account creation ────────────────────────
+interface ActivationSuccessProps {
+  accountResult: CreateAccountResponseDto;
+  onClose: () => void;
+}
+
+const ActivationSuccessPanel: React.FC<ActivationSuccessProps> = ({ accountResult, onClose }) => {
+  const [copied, setCopied] = useState(false);
+  const activationUrl = `${window.location.origin}/activate-account?token=${accountResult.activationToken}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(activationUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex items-center gap-2 text-emerald-700 font-semibold">
+        <CheckCircle className="w-5 h-5" />
+        Employee and account created successfully.
+      </div>
+
+      <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 space-y-1">
+        <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Account Details</div>
+        <div><span className="text-slate-500 text-xs">Username:</span> <span className="font-mono text-xs font-semibold">{accountResult.username}</span></div>
+        <div><span className="text-slate-500 text-xs">Email:</span> <span className="font-mono text-xs">{accountResult.email}</span></div>
+        <div><span className="text-slate-500 text-xs">Role:</span> <span className="text-xs font-semibold">{accountResult.role}</span></div>
+        <div><span className="text-slate-500 text-xs">Status:</span> <span className="text-xs text-amber-700 font-semibold">Pending Activation</span></div>
+      </div>
+
+      <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 space-y-2">
+        <div className="text-[11px] text-amber-700 font-semibold uppercase tracking-wider">
+          Dev Only — Activation Link
+        </div>
+        <p className="text-xs text-slate-600">
+          Share this link with the employee to set their password. In production this would be sent via email.
+        </p>
+        <div className="font-mono text-[11px] bg-white border border-slate-200 rounded p-2 break-all text-slate-700">
+          {activationUrl}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={copied ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+          onClick={handleCopy}
+        >
+          {copied ? 'Copied!' : 'Copy Activation Link'}
+        </Button>
+        <div className="text-[11px] text-slate-500">
+          Expires: {new Date(accountResult.activationTokenExpiresAt).toLocaleString()}
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="primary" size="sm" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const EmployeePage: React.FC = () => {
   const { user, isAdmin, isHR, isManager } = useAuth();
@@ -49,10 +131,16 @@ export const EmployeePage: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeResponseDto | null>(null);
+  const [lastCreatedAccount, setLastCreatedAccount] = useState<CreateAccountResponseDto | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Form states for Add / Edit
+  // Allowed roles for the role dropdown
+  const allowedRoles = useMemo(() => getAllowedRoles(user?.role || ''), [user?.role]);
+  const defaultRole = allowedRoles[0]?.value || 'Employee';
+
+  // Form state for Add / Edit
   const [formData, setFormData] = useState<Partial<EmployeeCreateDto>>({
     firstName: '',
     lastName: '',
@@ -60,18 +148,18 @@ export const EmployeePage: React.FC = () => {
     phone: '',
     dateOfJoining: new Date().toISOString().slice(0, 10),
     departmentId: '',
-    role: 'Employee',
+    role: defaultRole,
     employmentStatus: 'Active',
   });
 
-  const canManage = isAdmin || isHR;
+  const canManage = isAdmin || isHR || isManager;
 
   const loadData = async () => {
     setIsLoading(true);
     try {
       const [deptRes, empRes] = await Promise.all([
         departmentApi.getAll().catch(() => []),
-        canManage || isManager
+        canManage
           ? employeeApi.getAll().catch(() => [])
           : employeeApi.getMe().then((me) => (me ? [me] : [])).catch(() => []),
       ]);
@@ -114,19 +202,24 @@ export const EmployeePage: React.FC = () => {
 
   const handleOpenAdd = () => {
     setFormData({
-      userId: crypto.randomUUID ? crypto.randomUUID() : `usr-${Date.now()}`,
+      // Note: userId is NOT set here — it comes from AuthService after account creation
       firstName: '',
       lastName: '',
       email: '',
       phone: '',
       dateOfJoining: new Date().toISOString().slice(0, 10),
       departmentId: departments[0]?.departmentId || '',
-      role: 'Employee',
+      role: defaultRole,
       employmentStatus: 'Active',
     });
     setIsAddModalOpen(true);
   };
 
+  /**
+   * Correct Add Employee flow:
+   * 1. Call POST /api/v1/auth/accounts → get real UserId + activation token
+   * 2. Call POST /api/v1/employees with the real UserId
+   */
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.departmentId) {
@@ -136,9 +229,30 @@ export const EmployeePage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await employeeApi.create(formData as EmployeeCreateDto);
-      success('Employee created successfully.');
+      // STEP 1: Create Auth account → get real UserId and activation token
+      const accountResult = await authApi.createAccount({
+        email: formData.email!,
+        role: formData.role || defaultRole,
+      });
+
+      // STEP 2: Create Employee record using the REAL UserId from AuthService
+      const employeeDto: EmployeeCreateDto = {
+        userId: accountResult.userId,   // ← REAL UserId from AuthService
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        dateOfJoining: formData.dateOfJoining || new Date().toISOString().slice(0, 10),
+        departmentId: formData.departmentId!,
+        role: formData.role || defaultRole,
+        employmentStatus: 'Active',     // Always Active record; account itself is inactive until activated
+      };
+
+      await employeeApi.create(employeeDto);
+
       setIsAddModalOpen(false);
+      setLastCreatedAccount(accountResult);
+      setIsSuccessModalOpen(true);
       loadData();
     } catch (err: any) {
       toastError(err.message || 'Failed to create employee.', 'Server Error', err.errors);
@@ -156,7 +270,7 @@ export const EmployeePage: React.FC = () => {
       phone: emp.phone || '',
       dateOfJoining: emp.dateOfJoining ? emp.dateOfJoining.slice(0, 10) : new Date().toISOString().slice(0, 10),
       departmentId: emp.departmentId || '',
-      role: emp.role || 'Employee',
+      role: emp.role || defaultRole,
       employmentStatus: emp.employmentStatus || 'Active',
     });
     setIsEditModalOpen(true);
@@ -206,7 +320,7 @@ export const EmployeePage: React.FC = () => {
   };
 
   // If user is basic employee without view rights
-  if (!canManage && !isManager && employees.length === 0 && !isLoading) {
+  if (!canManage && employees.length === 0 && !isLoading) {
     return (
       <AccessDenied message="You do not have administrative authority to browse the full employee directory." />
     );
@@ -214,7 +328,7 @@ export const EmployeePage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Screen Header matching Wireframe 4 */}
+      {/* Screen Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-[11px] font-mono uppercase tracking-widest text-slate-400">
@@ -238,7 +352,7 @@ export const EmployeePage: React.FC = () => {
         )}
       </div>
 
-      {/* Search and Filters toolbar matching Wireframe 4 */}
+      {/* Search and Filters toolbar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center gap-3">
         <div className="relative flex-1 w-full">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -284,7 +398,7 @@ export const EmployeePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Table matching Wireframe 4 */}
+      {/* Employee Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         {isLoading ? (
           <LoadingSpinner message="Fetching employee directory from EmployeeService..." />
@@ -362,12 +476,14 @@ export const EmployeePage: React.FC = () => {
                               >
                                 Edit
                               </button>
-                              <button
-                                onClick={() => handleOpenDelete(emp)}
-                                className="px-2 py-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded text-xs transition-colors"
-                              >
-                                Delete
-                              </button>
+                              {!(emp.employeeId === user?.employeeId || (user?.userId && emp.userId === user.userId)) && (
+                                <button
+                                  onClick={() => handleOpenDelete(emp)}
+                                  className="px-2 py-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded text-xs transition-colors"
+                                >
+                                  Delete
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -387,12 +503,12 @@ export const EmployeePage: React.FC = () => {
         </div>
       </div>
 
-      {/* ADD EMPLOYEE MODAL matching EmployeeCreateDto */}
+      {/* ADD EMPLOYEE MODAL */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title="Add New Employee"
-        subtitle="Create an employee profile record in EmployeeService"
+        subtitle="Creates an auth account then an employee profile record"
         footer={
           <>
             <Button variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>
@@ -405,6 +521,11 @@ export const EmployeePage: React.FC = () => {
         }
       >
         <form onSubmit={handleCreateEmployee} className="space-y-3.5">
+          <div className="p-2.5 rounded-lg border border-blue-100 bg-blue-50 text-[11px] text-blue-700">
+            This will create an auth account (pending activation) and an employee profile.
+            The employee will receive an activation link to set their password.
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="First Name"
@@ -452,14 +573,9 @@ export const EmployeePage: React.FC = () => {
               label="Role"
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              options={[
-                { value: 'Employee', label: 'Employee' },
-                { value: 'Manager', label: 'Manager' },
-                { value: 'HR', label: 'HR' },
-                { value: 'Admin', label: 'Admin' },
-                { value: 'Support', label: 'Support Staff' },
-              ]}
+              options={allowedRoles}
               required
+              helperText={`You can create: ${allowedRoles.map(r => r.label).join(', ')}`}
             />
           </div>
 
@@ -483,6 +599,22 @@ export const EmployeePage: React.FC = () => {
             />
           </div>
         </form>
+      </Modal>
+
+      {/* SUCCESS / ACTIVATION LINK MODAL */}
+      <Modal
+        isOpen={isSuccessModalOpen}
+        onClose={() => setIsSuccessModalOpen(false)}
+        title="Employee Created"
+        subtitle="Account pending activation"
+        maxWidth="md"
+      >
+        {lastCreatedAccount && (
+          <ActivationSuccessPanel
+            accountResult={lastCreatedAccount}
+            onClose={() => setIsSuccessModalOpen(false)}
+          />
+        )}
       </Modal>
 
       {/* EDIT EMPLOYEE MODAL */}

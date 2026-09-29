@@ -5,6 +5,7 @@ import { GatewayConfigProvider } from './context/GatewayConfigContext';
 import { AuthProvider } from './context/AuthContext';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { LoginPage } from './pages/LoginPage';
+import { ActivateAccountPage } from './pages/ActivateAccountPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { EmployeePage } from './pages/EmployeePage';
 import { DepartmentPage } from './pages/DepartmentPage';
@@ -22,8 +23,9 @@ export default function App() {
         <AuthProvider>
           <BrowserRouter>
             <Routes>
-              {/* Public Authentication Route */}
+              {/* Public Authentication Routes */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/activate-account" element={<ActivateAccountPage />} />
 
               {/* Protected Workspace Routes inside DashboardLayout */}
               <Route element={<DashboardLayout />}>

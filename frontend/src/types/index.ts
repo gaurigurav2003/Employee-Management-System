@@ -34,6 +34,30 @@ export interface RegisterRequestDto {
   role?: string;
 }
 
+/** Request to create a new internal account (Admin/HR/Manager only). */
+export interface CreateAccountRequestDto {
+  email: string;
+  role: string;
+}
+
+/** Response from the account creation endpoint. */
+export interface CreateAccountResponseDto {
+  userId: string;
+  username: string;
+  email: string;
+  role: string;
+  /** Plain-text activation token for constructing the activation link. */
+  activationToken: string;
+  activationTokenExpiresAt: string;
+}
+
+/** Request to activate an account (set password). */
+export interface ActivateAccountRequestDto {
+  token: string;
+  password: string;
+  confirmPassword: string;
+}
+
 // 2. EmployeeService Types (EmployeeService Swagger)
 export interface EmployeeResponseDto {
   employeeId: string;

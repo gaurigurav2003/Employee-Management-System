@@ -1,5 +1,3 @@
-﻿using AuthService.Models;
-
 using AuthService.Models;
 using AuthService.Data;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +23,12 @@ namespace AuthService.Repositories
         {
             return await _context.Users.AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+        }
+
+        public async Task<User?> GetByActivationTokenHashAsync(string tokenHash)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.ActivationTokenHash == tokenHash);
         }
 
         public async Task<User> CreateAsync(User user)

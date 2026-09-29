@@ -31,8 +31,21 @@ export const AttendancePage: React.FC = () => {
   const loadAttendance = async () => {
     setIsLoading(true);
     try {
-      if (user?.employeeId) {
-        const myLogs = await attendanceApi.getByEmployeeId(user.employeeId).catch(() => []);
+      let currentEmpId = user?.employeeId;
+      if (!currentEmpId && user?.userId) {
+        try {
+          const me = await employeeApi.getMe();
+          if (me?.employeeId) currentEmpId = me.employeeId;
+        } catch {
+          try {
+            const me = await employeeApi.getByUserId(user.userId);
+            if (me?.employeeId) currentEmpId = me.employeeId;
+          } catch {}
+        }
+      }
+
+      if (currentEmpId) {
+        const myLogs = await attendanceApi.getByEmployeeId(currentEmpId).catch(() => []);
         const logs = Array.isArray(myLogs) ? myLogs : [];
         setHistory(logs);
 
@@ -58,37 +71,50 @@ export const AttendancePage: React.FC = () => {
   }, [user]);
 
   const handleCheckIn = async () => {
-  setIsSubmitting(true);
+    setIsSubmitting(true);
 
-  try {
-    let employeeId = user?.employeeId;
+    try {
+      let employeeId = user?.employeeId;
 
-    // HR / Admin / Manager may not have employeeId in login session
-    if (!employeeId && user?.userId) {
-      const employees = await employeeApi.getAll();
+      if (!employeeId && user?.userId) {
+        try {
+          const me = await employeeApi.getMe();
+          if (me?.employeeId) {
+            employeeId = me.employeeId;
+          }
+        } catch {
+          try {
+            const me = await employeeApi.getByUserId(user.userId);
+            if (me?.employeeId) {
+              employeeId = me.employeeId;
+            }
+          } catch {
+            if (isAdmin || isHR || isManager) {
+              const employees = await employeeApi.getAll().catch(() => []);
+              const employee = employees.find((emp) => emp.userId === user.userId);
+              if (employee) {
+                employeeId = employee.employeeId;
+              }
+            }
+          }
+        }
 
-      const employee = employees.find(
-        (emp) => emp.userId === user.userId
-      );
+        if (!employeeId) {
+          toastError(
+            'Employee profile not found for this user.',
+            'Check-In Failed'
+          );
+          return;
+        }
+      }
 
-      if (!employee) {
+      if (!employeeId) {
         toastError(
-          'Employee profile not found for this user.',
+          'Employee ID is not available.',
           'Check-In Failed'
         );
         return;
       }
-
-      employeeId = employee.employeeId;
-    }
-
-    if (!employeeId) {
-      toastError(
-        'Employee ID is not available.',
-        'Check-In Failed'
-      );
-      return;
-    }
 
     const now = new Date();
 

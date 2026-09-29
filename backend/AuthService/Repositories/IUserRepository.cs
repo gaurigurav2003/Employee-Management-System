@@ -1,5 +1,3 @@
-﻿using AuthService.Models;
-
 using AuthService.Models;
 
 namespace AuthService.Repositories
@@ -9,6 +7,8 @@ namespace AuthService.Repositories
         Task<User?> GetByUsernameAsync(string username);
 
         Task<User?> GetByEmailAsync(string email);
+
+        Task<User?> GetByActivationTokenHashAsync(string tokenHash);
 
         Task<User> CreateAsync(User user);
 

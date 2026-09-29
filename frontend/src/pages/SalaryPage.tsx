@@ -210,13 +210,13 @@ const [isEditComponentModalOpen, setIsEditComponentModalOpen] =
       setIsSubmitting(false);
     }
   };
-  const handleEditComponent = (component: SalaryComponentResponseDto) => {
-  setEditingComponent(component);
-  setCompName(component.componentName);
-  setCompAmount(String(component.amount));
-  setCompType(component.componentType);
-  setIsEditComponentModalOpen(true);
-};
+  const handleEditComponent = (component: SalaryComponentResponseDto) => {
+    setEditingComponent(component);
+    setCompName(component.componentName || '');
+    setCompAmount(String(component.amount));
+    setCompType((component.componentType as 'Earning' | 'Deduction') || 'Earning');
+    setIsEditComponentModalOpen(true);
+  };
 const handleUpdateComponent = async (e: React.FormEvent) => {
   e.preventDefault();
   if (!editingComponent) return;

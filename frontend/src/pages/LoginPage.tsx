@@ -5,17 +5,14 @@ import { useToast } from '../context/ToastContext';
 import { useGatewayConfig } from '../context/GatewayConfigContext';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { Select } from '../components/common/Select';
 import { Modal } from '../components/common/Modal';
-import { UserRole } from '../types';
-import { Eye, EyeOff, Layers, Server, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Layers, Server, ArrowRight } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('admin@company.com');
-  const [password, setPassword] = useState('Admin@123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
-  const [previewRole, setPreviewRole] = useState<UserRole>('Admin');
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
 
@@ -33,9 +30,17 @@ export const LoginPage: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await login(username.trim(), password, rememberMe, previewRole);
+      const session = await login(username.trim(), password, rememberMe);
       success('Logged in successfully. Welcome back!', 'Authentication Successful');
-      navigate('/dashboard');
+
+      // Redirect based on role from JWT/server — no client-side role override
+      const role = session.role;
+      if (role === 'Admin') navigate('/dashboard');
+      else if (role === 'HR') navigate('/dashboard');
+      else if (role === 'Manager') navigate('/dashboard');
+      else if (role === 'Employee') navigate('/dashboard');
+      else if (role === 'Support') navigate('/dashboard');
+      else navigate('/dashboard');
     } catch (err: any) {
       toastError(
         err.message || 'Invalid username or password. Please try again.',
@@ -48,15 +53,9 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleDemoFill = (userType: UserRole, userEmail: string) => {
-    setUsername(userEmail);
-    setPassword('Pass@123');
-    setPreviewRole(userType);
-  };
-
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-white">
-      {/* Left Panel - Dark Hero Area matching Wireframe 1 */}
+      {/* Left Panel - Dark Hero Area */}
       <div className="md:w-5/12 bg-slate-900 text-white p-8 md:p-14 flex flex-col justify-between relative overflow-hidden">
         {/* Subtle geometric background element */}
         <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-slate-800/60 rounded-full blur-3xl pointer-events-none" />
@@ -90,7 +89,7 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Bottom Metric Counters matching Wireframe 1 */}
+        {/* Bottom Metric Counters */}
         <div className="relative z-10 pt-8 border-t border-slate-800 grid grid-cols-3 gap-4">
           <div>
             <div className="text-2xl font-bold text-white tracking-tight">248</div>
@@ -172,24 +171,7 @@ export const LoginPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Role Preview Selector matching Wireframe 1 & SRS notes */}
-            <div>
-              <Select
-                label="Preview as role"
-                value={previewRole}
-                onChange={(e) => setPreviewRole(e.target.value as UserRole)}
-                options={[
-                  { value: 'Admin', label: 'Admin (Full administration & payroll)' },
-                  { value: 'HR', label: 'HR (Employees, departments & payroll)' },
-                  { value: 'Manager', label: 'Manager (Team approvals & attendance)' },
-                  { value: 'Employee', label: 'Employee (Self-service profile & leaves)' },
-                  { value: 'Support', label: 'Support Staff (Ticket management)' },
-                ]}
-                helperText="Informational preview selector as specified in Wireframe 1."
-              />
-            </div>
-
-            {/* Gateway indicator in login */}
+            {/* Gateway indicator */}
             <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-600">
               <div className="flex items-center gap-2">
                 <Server className="w-3.5 h-3.5 text-slate-500" />
@@ -212,53 +194,14 @@ export const LoginPage: React.FC = () => {
             </Button>
           </form>
 
-          {/* Quick Demo Credentials Helpers */}
-          <div className="mt-6 pt-6 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-slate-400" /> Quick Account Prefill:
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleDemoFill('Admin', 'admin@company.com')}
-                className="px-2.5 py-1.5 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100 text-left transition-colors text-[11px]"
-              >
-                <strong>Admin</strong> <span className="text-slate-400 block truncate">admin@company.com</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDemoFill('HR', 'hr@company.com')}
-                className="px-2.5 py-1.5 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100 text-left transition-colors text-[11px]"
-              >
-                <strong>HR</strong> <span className="text-slate-400 block truncate">hr@company.com</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDemoFill('Manager', 'manager@company.com')}
-                className="px-2.5 py-1.5 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100 text-left transition-colors text-[11px]"
-              >
-                <strong>Manager</strong> <span className="text-slate-400 block truncate">manager@company.com</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDemoFill('Employee', 'alex.rivera@company.com')}
-                className="px-2.5 py-1.5 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-100 text-left transition-colors text-[11px]"
-              >
-                <strong>Employee</strong> <span className="text-slate-400 block truncate">alex.rivera@company.com</span>
-              </button>
-            </div>
-          </div>
-
           {/* Help footer */}
           <p className="text-center text-xs text-slate-500 mt-6">
-            New to EMS?{' '}
+            Need access?{' '}
             <button
-              onClick={() => alert('User accounts are created and managed by administrators (FR-AUT-004). Contact your system administrator for access.')}
+              onClick={() => alert('User accounts are created and managed by administrators. Contact your system administrator for access.')}
               className="text-slate-900 font-semibold hover:underline"
             >
-              Register / get help
+              Contact your administrator
             </button>
           </p>
         </div>

@@ -14,17 +14,17 @@ namespace LeaveService.Controllers
         private readonly EmployeeServiceClient _employeeServiceClient;
 
         public LeaveController(
-     ILeaveService service,
-     EmployeeServiceClient employeeServiceClient)
+            ILeaveService service,
+            EmployeeServiceClient employeeServiceClient)
         {
             _service = service;
             _employeeServiceClient = employeeServiceClient;
         }
 
-        [Authorize(Roles = "Employee,HR,Manager,Admin")]
+        // Apply for own leave (All authenticated employee-linked roles: Employee, HR, Manager, Admin, Support)
+        [Authorize]
         [HttpPost]
-        public async Task<ActionResult<LeaveResponseDto>> ApplyLeave(
-     LeaveCreateDto dto)
+        public async Task<ActionResult<LeaveResponseDto>> ApplyLeave(LeaveCreateDto dto)
         {
             try
             {
@@ -58,7 +58,7 @@ namespace LeaveService.Controllers
             }
         }
 
-
+        // Get All Leaves (Admin, HR, Manager queue)
         [Authorize(Roles = "Admin,HR,Manager")]
         [HttpGet("")]
         public async Task<ActionResult<IEnumerable<LeaveResponseDto>>> GetAllLeaves()
@@ -73,17 +73,18 @@ namespace LeaveService.Controllers
                 return Problem("An unexpected error occurred.");
             }
         }
+
         [Authorize]
         [HttpGet("{leaveId}")]
-        public async Task<ActionResult<LeaveResponseDto>> GetLeaveById(
-    Guid leaveId)
+        public async Task<ActionResult<LeaveResponseDto>> GetLeaveById(Guid leaveId)
         {
             try
             {
                 var result =
                     await _service.GetLeaveByIdAsync(leaveId);
 
-                if (User.IsInRole("Employee"))
+                var isPrivileged = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Manager");
+                if (!isPrivileged)
                 {
                     var employee =
                         await _employeeServiceClient.GetMyEmployeeAsync();
@@ -115,10 +116,10 @@ namespace LeaveService.Controllers
 
         [Authorize]
         [HttpGet("employee/{employeeId}")]
-        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>>
-     GetLeavesByEmployee(Guid employeeId)
+        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>> GetLeavesByEmployee(Guid employeeId)
         {
-            if (User.IsInRole("Employee"))
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Manager");
+            if (!isPrivileged)
             {
                 var employee =
                     await _employeeServiceClient.GetMyEmployeeAsync();
@@ -142,12 +143,13 @@ namespace LeaveService.Controllers
 
             return Ok(result);
         }
+
         [Authorize]
         [HttpGet("{employeeId}/history")]
-        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>>
-            GetLeaveHistory(Guid employeeId)
+        public async Task<ActionResult<IEnumerable<LeaveResponseDto>>> GetLeaveHistory(Guid employeeId)
         {
-            if (User.IsInRole("Employee"))
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Manager");
+            if (!isPrivileged)
             {
                 var employee =
                     await _employeeServiceClient.GetMyEmployeeAsync();
@@ -178,12 +180,27 @@ namespace LeaveService.Controllers
         {
             try
             {
-                var updated = await _service.ApproveLeaveAsync(leaveId, approverId);
+                var callerEmployee = await _employeeServiceClient.GetMyEmployeeAsync();
+                var effectiveApproverId = approverId != Guid.Empty
+                    ? approverId
+                    : (callerEmployee?.EmployeeId ?? Guid.Empty);
+
+                var leave = await _service.GetLeaveByIdAsync(leaveId);
+                if (callerEmployee != null && leave.EmployeeId == callerEmployee.EmployeeId)
+                {
+                    return StatusCode(403, new { message = "You cannot approve your own leave." });
+                }
+
+                var updated = await _service.ApproveLeaveAsync(leaveId, effectiveApproverId);
                 return Ok(updated);
             }
             catch (KeyNotFoundException)
             {
                 return NotFound();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(403, new { error = ex.Message });
             }
             catch (ArgumentException ex)
             {
@@ -201,12 +218,27 @@ namespace LeaveService.Controllers
         {
             try
             {
-                var updated = await _service.RejectLeaveAsync(leaveId, approverId);
+                var callerEmployee = await _employeeServiceClient.GetMyEmployeeAsync();
+                var effectiveApproverId = approverId != Guid.Empty
+                    ? approverId
+                    : (callerEmployee?.EmployeeId ?? Guid.Empty);
+
+                var leave = await _service.GetLeaveByIdAsync(leaveId);
+                if (callerEmployee != null && leave.EmployeeId == callerEmployee.EmployeeId)
+                {
+                    return StatusCode(403, new { message = "You cannot reject/modify your own leave." });
+                }
+
+                var updated = await _service.RejectLeaveAsync(leaveId, effectiveApproverId);
                 return Ok(updated);
             }
             catch (KeyNotFoundException)
             {
                 return NotFound();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(403, new { error = ex.Message });
             }
             catch (ArgumentException ex)
             {

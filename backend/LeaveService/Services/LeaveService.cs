@@ -66,6 +66,7 @@ namespace LeaveService.Services
             var leave = await _repo.GetByIdAsync(leaveId);
             if (leave == null) throw new KeyNotFoundException("Leave not found");
             if (leave.Status != "Pending") throw new ArgumentException("Only pending leaves can be approved");
+            if (leave.EmployeeId == approverId) throw new InvalidOperationException("Self-approval is forbidden. Users cannot approve their own leaves.");
 
             leave.Status = "Approved";
             leave.ApprovedBy = approverId;
@@ -80,6 +81,7 @@ namespace LeaveService.Services
             var leave = await _repo.GetByIdAsync(leaveId);
             if (leave == null) throw new KeyNotFoundException("Leave not found");
             if (leave.Status != "Pending") throw new ArgumentException("Only pending leaves can be rejected");
+            if (leave.EmployeeId == approverId) throw new InvalidOperationException("Self-approval/rejection is forbidden. Users cannot approve/reject their own leaves.");
 
             leave.Status = "Rejected";
             leave.ApprovedBy = approverId;

@@ -62,6 +62,7 @@ export const ProfilePage: React.FC = () => {
           departmentId: 'dept-1',
           role: user?.role || 'Admin',
           employmentStatus: 'Active',
+          userId: user?.userId || '',
         };
         setProfile(fallback);
         setEditFirstName(fallback.firstName || '');

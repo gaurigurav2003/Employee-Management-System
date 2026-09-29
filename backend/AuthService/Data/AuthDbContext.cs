@@ -24,6 +24,10 @@ namespace AuthService.Data
                 entity.Property(u => u.PasswordHash).IsRequired();
                 entity.HasIndex(u => u.Username).IsUnique();
                 entity.HasIndex(u => u.Email).IsUnique();
+
+                // Activation fields – nullable
+                entity.Property(u => u.ActivationTokenHash).IsRequired(false);
+                entity.Property(u => u.ActivationTokenExpiresAt).IsRequired(false);
             });
         }
     }

@@ -14,16 +14,17 @@ namespace SupportService.Controllers
         private readonly EmployeeServiceClient _employeeServiceClient;
 
         public SupportTicketController(
-     ISupportTicketService service,
-     EmployeeServiceClient employeeServiceClient)
+            ISupportTicketService service,
+            EmployeeServiceClient employeeServiceClient)
         {
             _service = service;
             _employeeServiceClient = employeeServiceClient;
         }
-        [Authorize(Roles = "Employee")]
+
+        // Create support ticket (All authenticated roles: Employee, HR, Manager, Admin, Support)
+        [Authorize]
         [HttpPost]
-        public async Task<IActionResult> Create(
-            [FromBody] SupportTicketCreateDto dto)
+        public async Task<IActionResult> Create([FromBody] SupportTicketCreateDto dto)
         {
             var employee =
                 await _employeeServiceClient.GetMyEmployeeAsync();
@@ -60,7 +61,8 @@ namespace SupportService.Controllers
                 });
             }
 
-            if (User.IsInRole("Employee"))
+            var isStaff = User.IsInRole("Support") || User.IsInRole("Admin") || User.IsInRole("HR");
+            if (!isStaff)
             {
                 var employee =
                     await _employeeServiceClient.GetMyEmployeeAsync();
@@ -86,7 +88,8 @@ namespace SupportService.Controllers
         [HttpGet("employee/{employeeId}")]
         public async Task<IActionResult> GetByEmployee(Guid employeeId)
         {
-            if (User.IsInRole("Employee"))
+            var isStaff = User.IsInRole("Support") || User.IsInRole("Admin") || User.IsInRole("HR");
+            if (!isStaff)
             {
                 var employee =
                     await _employeeServiceClient.GetMyEmployeeAsync();
@@ -111,6 +114,7 @@ namespace SupportService.Controllers
             return Ok(result);
         }
 
+        // Get all tickets (Support / Admin / HR management view)
         [Authorize(Roles = "Support,Admin,HR")]
         [HttpGet]
         public async Task<IActionResult> GetAll()
@@ -121,6 +125,7 @@ namespace SupportService.Controllers
             return Ok(result);
         }
 
+        // Update ticket (Support / Admin / HR staff management)
         [Authorize(Roles = "Support,Admin,HR")]
         [HttpPut("{ticketId}")]
         public async Task<IActionResult> Update(
